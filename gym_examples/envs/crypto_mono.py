@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 
 import gymnasium as gym
-from utils.normalizer import Normalizer
+from ..utils.normalizer import Normalizer
 
 
 class Actions(Enum):
