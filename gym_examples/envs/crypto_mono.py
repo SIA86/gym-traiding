@@ -149,7 +149,7 @@ class TradingEnv(gym.Env):
         if self.render_mode == 'human':
             self._render_frame()
 
-        return observation, step_reward, self._truncated, info
+        return observation, step_reward, False, self._truncated, info
 
     def _get_info(self):
         return dict(
@@ -251,26 +251,8 @@ class TradingEnv(gym.Env):
 
 class Normalizer():
     def __init__(self):
-        self.std = None
-        self.mean = None
         self.min = None
         self.max = None
-
-    def norm_std(self, 
-                 df_x: pd.DataFrame = None, 
-                 df_y: pd.DataFrame | None = None,
-                 ) -> tuple[pd.DataFrame, pd.DataFrame | None]:
-        if df_x is not None: 
-            self.mean = df_x.mean() 
-            self.std = df_x.std()
-            df_x = (df_x - self.mean) / self.std
-        else:
-            raise TypeError('Data must be pd.DataFrame format')
-        if df_y is not None:
-            col = df_y.columns
-            df_y= (df_y - self.mean[col]) / self.std[col]
-        
-        return df_x, df_y
     
     def norm_minmax(self, 
                     df_x: pd.DataFrame = None, 
@@ -288,21 +270,6 @@ class Normalizer():
             col = df_y.columns
             df_y = (self.b - self.a) * (df_y - self.min[col]) / (self.max[col] - self.min[col]) + self.a  
 
-        return df_x, df_y
-    
-    def denorm_std(self,
-                   df_x: pd.DataFrame | None = None, 
-                   df_y: pd.DataFrame | None = None,
-                   ) -> Tuple[pd.DataFrame | None, pd.DataFrame | None]:      
-        if self.mean is not None and self.std is not None:     
-            if df_x is not None:
-                df_x= df_x * self.std + self.mean
-            if df_y is not None:
-                col = df_y.columns
-                df_y = df_y * self.std[col] + self.mean[col]
-        else:
-            raise ValueError("No normalization parametrs found" )
-                        
         return df_x, df_y
 
     def denorm_minmax(self,
