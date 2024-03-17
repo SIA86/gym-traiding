@@ -1,1 +1,1 @@
-from gym_examples.envs.crypto_mono import TraidingEnv
+from gym_examples.envs.crypto_mono import TradingEnv
