@@ -56,7 +56,7 @@ class TradingEnv(gym.Env):
         # spaces
         self.action_space = gym.spaces.Discrete(len(Actions))
         self.observation_space = gym.spaces.Box(
-            low=0, high=1, shape=self.shape, dtype=np.float32,
+            low=-1e6, high=1e6, shape=self.shape, dtype=np.float32,
         )
 
         # episode
@@ -244,10 +244,10 @@ class TradingEnv(gym.Env):
         df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
         prices = df.loc[:,'close'].to_numpy()
         signal_features = df.loc[:,self.features_names]
-        norm_signal_features, _ = normalizer.norm_minmax(df_x=signal_features, scale=(0,1))
-        norm_signal_features = norm_signal_features.to_numpy()
+        #norm_signal_features, _ = normalizer.norm_minmax(df_x=signal_features, scale=(0,1))
+        #norm_signal_features = norm_signal_features.to_numpy()
 
-        return prices.astype(np.float32), norm_signal_features.astype(np.float32)
+        return prices.astype(np.float32), signal_features.to_numpy().astype(np.float32)
 
 
 class Normalizer():
