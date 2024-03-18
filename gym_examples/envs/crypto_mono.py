@@ -35,13 +35,13 @@ class TradingEnv(gym.Env):
                  frame_bound: tuple[int, int],
                  trade_fee: float,
                  amount: int,
-                 #render_mode=None
+                 render_mode=None
                  ):
         
         assert df.ndim == 2
-        #assert render_mode is None or render_mode in self.metadata['render_modes']
+        assert render_mode is None or render_mode in self.metadata['render_modes']
 
-        #self.render_mode = render_mode
+        self.render_mode = render_mode
 
         self.df = df
         self.window_size = window_size
