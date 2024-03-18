@@ -56,7 +56,7 @@ class TradingEnv(gym.Env):
         # spaces
         self.action_space = gym.spaces.Discrete(len(Actions))
         self.observation_space = gym.spaces.Box(
-            low=-1e6, high=1e6, shape=self.shape, dtype=np.float32,
+            low=0, high=1, shape=self.shape, dtype=np.float32,
         )
 
         # episode
@@ -96,11 +96,7 @@ class TradingEnv(gym.Env):
     
     @property
     def _comission(self):
-        return self.prices[self._current_tick] * self.amount * self.trade_fee
-    
-    @property
-    def _hold_penalty(self):
-        return self.prices[self._current_tick] * self.amount * 0.0001
+        return 
 
     def step(self, action):
         self._truncated = False
@@ -115,6 +111,7 @@ class TradingEnv(gym.Env):
             if action == Actions.Buy.value and not self._truncated:
                 self._position = self._position.opposite()
                 self._last_trade_tick = self._current_tick
+                self.open_comission = self.prices[self._current_tick] * self.amount * self.trade_fee
                 step_reward = 0
             elif action == Actions.Close.value or action == Actions.Hold.value:
                 pass
@@ -129,8 +126,9 @@ class TradingEnv(gym.Env):
                 last_trade_price = self.prices[self._last_trade_tick]
                 price_diff = current_price - last_trade_price
                 duration = self._current_tick - self._last_trade_tick
+                self.close_comission = self.prices[self._current_tick] * self.amount * self.trade_fee
 
-                step_reward += (0.999 ** duration) * (price_diff * self.amount) - (2 * self._comission) #вычет комиссии
+                step_reward += (0.999 ** duration) * (price_diff * self.amount) - (self.open_comission + self.close_comission) #вычет комиссии
 
                 shares = (self._total_profit * (1 - self.trade_fee)) / last_trade_price
                 self._total_profit = (shares * (1 - self.trade_fee)) * current_price
