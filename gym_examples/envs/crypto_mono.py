@@ -112,7 +112,7 @@ class TradingEnv(gym.Env):
 
         #если нет окрытых позиций
         if self._position == Positions.No_position:
-            if action == Actions.Buy.value:
+            if action == Actions.Buy.value and not self._truncated:
                 self._position = self._position.opposite()
                 self._last_trade_tick = self._current_tick
                 step_reward = 0
@@ -130,7 +130,7 @@ class TradingEnv(gym.Env):
                 price_diff = current_price - last_trade_price
                 duration = self._current_tick - self._last_trade_tick
 
-                step_reward += (0.999 ** duration * (price_diff * self.amount) - 2 * self._comission) #вычет комиссии
+                step_reward += (0.999 ** duration) * (price_diff * self.amount) - (2 * self._comission) #вычет комиссии
 
                 shares = (self._total_profit * (1 - self.trade_fee)) / last_trade_price
                 self._total_profit = (shares * (1 - self.trade_fee)) * current_price
