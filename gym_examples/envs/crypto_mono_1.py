@@ -24,7 +24,7 @@ class Positions(Enum):
         return Positions.Long if self == Positions.No_position else Positions.No_position
 
 
-class TradingEnv(gym.Env):
+class TradingEnv1(gym.Env):
 
     metadata = {'render_modes': ['human'], 'render_fps': 3}
 
@@ -122,10 +122,10 @@ class TradingEnv(gym.Env):
                 current_price = self.prices[self._current_tick]
                 last_trade_price = self.prices[self._last_trade_tick]
                 price_diff = current_price - last_trade_price
-                #duration = self._current_tick - self._last_trade_tick
+                duration = self._current_tick - self._last_trade_tick
                 #comission = (current_price  + last_trade_price) * self.amount * self.trade_fee
 
-                step_reward += price_diff * self.amount# - comission #вычет комиссии
+                step_reward += (0.999 ** duration) * price_diff * self.amount# - comission #вычет комиссии
 
                 shares = (self._total_profit * (1 - self.trade_fee)) / last_trade_price
                 self._total_profit = (shares * (1 - self.trade_fee)) * current_price
