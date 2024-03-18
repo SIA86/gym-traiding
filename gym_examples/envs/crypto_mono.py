@@ -111,10 +111,9 @@ class TradingEnv(gym.Env):
             if action == Actions.Buy.value and not self._truncated:
                 self._position = self._position.opposite()
                 self._last_trade_tick = self._current_tick
-                self.open_comission = self.prices[self._current_tick] * self.amount * self.trade_fee
-                step_reward = 0
+                step_reward += self.prices[self._current_tick] * self.amount * 0.0001
             elif action == Actions.Close.value or action == Actions.Hold.value:
-                pass
+                step_reward -= 1e10
 
 
         #если есть окрытые позиции
@@ -125,16 +124,19 @@ class TradingEnv(gym.Env):
                 current_price = self.prices[self._current_tick]
                 last_trade_price = self.prices[self._last_trade_tick]
                 price_diff = current_price - last_trade_price
-                duration = self._current_tick - self._last_trade_tick
-                self.close_comission = self.prices[self._current_tick] * self.amount * self.trade_fee
+                #duration = self._current_tick - self._last_trade_tick
+                comission = (current_price  + last_trade_price) * self.amount * self.trade_fee
 
-                step_reward += (0.999 ** duration) * (price_diff * self.amount) - (self.open_comission + self.close_comission) #вычет комиссии
+                step_reward += price_diff * self.amount - comission #вычет комиссии
 
                 shares = (self._total_profit * (1 - self.trade_fee)) / last_trade_price
                 self._total_profit = (shares * (1 - self.trade_fee)) * current_price
 
-            elif action == Actions.Hold.value or action == Actions.Buy.value:
-                step_reward = 0 
+            elif action == Actions.Hold.value: 
+                step_reward -= self.prices[self._current_tick] * self.amount * 0.00005
+
+            elif action == Actions.Buy.value:
+                step_reward -= 1e10
 
         self._total_reward += step_reward
 
