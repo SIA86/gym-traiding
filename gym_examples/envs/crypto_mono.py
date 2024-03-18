@@ -48,7 +48,7 @@ class TradingEnv(gym.Env):
         self.features_names = features_names
         self.frame_bound = frame_bound
         self.prices, self.signal_features = self._process_data()
-        self.shape = (window_size, self.signal_features.shape[1])
+        self.shape = (window_size, self.signal_features.shape[1] + 1)
 
         self.trade_fee = trade_fee
         self.amount = amount
@@ -94,9 +94,6 @@ class TradingEnv(gym.Env):
 
         return observation, info
     
-    @property
-    def _comission(self):
-        return 
 
     def step(self, action):
         self._truncated = False
@@ -113,7 +110,7 @@ class TradingEnv(gym.Env):
                 self._last_trade_tick = self._current_tick
                 step_reward += self.prices[self._current_tick] * self.amount * 0.0001
             elif action == Actions.Close.value or action == Actions.Hold.value:
-                step_reward -= 1e10
+                step_reward -= self.prices[self._current_tick] * self.amount * 0.01
 
 
         #если есть окрытые позиции
@@ -136,7 +133,7 @@ class TradingEnv(gym.Env):
                 step_reward -= self.prices[self._current_tick] * self.amount * 0.00005
 
             elif action == Actions.Buy.value:
-                step_reward -= 1e10
+                step_reward -= self.prices[self._current_tick] * self.amount * 0.01
 
         self._total_reward += step_reward
 
@@ -160,7 +157,13 @@ class TradingEnv(gym.Env):
         )
 
     def _get_observation(self):
-        return self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1]
+        obs = self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1]
+        if self._position == Positions.Long:
+            position_column = np.ones(shape=(len(obs), 1))
+        elif self._position == Positions.No_position:
+            position_column = np.zeros(shape=(len(obs), 1))
+        obs = np.concatenate([obs, position_column], axis = 1)
+        return obs.astype(np.float32)
 
     def _update_history(self, info):
         if not self.history:
