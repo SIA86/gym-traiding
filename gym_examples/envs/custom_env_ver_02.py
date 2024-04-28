@@ -9,6 +9,7 @@ from typing import Tuple
 
 import gymnasium as gym
 
+"""Награда только за прибыль/убыток от сделок"""
 
 class Actions(Enum):
     Buy = 0
@@ -24,34 +25,39 @@ class Positions(Enum):
         return Positions.Long if self == Positions.No_position else Positions.No_position
 
 
-class TradingEnv1(gym.Env):
-
+class CryptoEnvV2(gym.Env):
     metadata = {'render_modes': ['human'], 'render_fps': 3}
-
     def __init__(self, 
-                 df: pd.DataFrame, 
+                 dataframe: pd.DataFrame, 
                  window_size: int,
                  features_names: list[str], 
                  frame_bound: tuple[int, int],
-                 trade_fee: float,
-                 amount: int,
-                 render_mode=None
+                 #config
+                 trade_fee: float = 0.001,
+                 initial_account: float = 100000.0,
+                 render_mode=None,
+                 **kwargs
                  ):
         
-        assert df.ndim == 2
+        assert dataframe.ndim == 2
         assert render_mode is None or render_mode in self.metadata['render_modes']
 
         self.render_mode = render_mode
 
-        self.df = df
+        #параметры данных
+        self.df = dataframe
         self.window_size = window_size
         self.features_names = features_names
         self.frame_bound = frame_bound
-        self.prices, self.signal_features = self._process_data()
-        self.shape = (window_size, self.signal_features.shape[1] + 1)
 
+        self.prices, self.signal_features = self._process_data()
+        self.shape = (window_size, self.signal_features.shape[1] + 1) #+1 потому то добавляю инф о том есть ли позиции
+
+        #параметры портфеля
         self.trade_fee = trade_fee
-        self.amount = amount
+        self.initial_account = initial_account
+        self.start_tick = self.window_size
+        self.end_tick = len(self.prices) - 1
 
         # spaces
         self.action_space = gym.spaces.Discrete(len(Actions))
@@ -59,30 +65,42 @@ class TradingEnv1(gym.Env):
             low=0, high=1, shape=self.shape, dtype=np.float32,
         )
 
-        # episode
-        self._start_tick = self.window_size
-        self._end_tick = len(self.prices) - 1
-        self._truncated = None
-        self._current_tick = None
-        self._last_trade_tick = None
-        self._position = None
-        self._position_history = None
-        self._total_reward = None
-        self._total_profit = None
-        self._first_rendering = None
-        self.history = None
+        #парметры эпизода
+        self.truncated = None #флаг на случай если депозит уходит в ноль или ниже разрешенного уровня
+        self.done = None #флаг сигнализирующий о конце датасета
+        self.current_tick = None #номер текущей свечи в последовательности
+        self.last_trade_tick = None
+        self.position = None #флаг сигнализируещеей о наличии открытой позиции
+        self.position_history = None #журнал сделок
+        self.lots = None #кол-во лотов в портфеле
+    
+        self.cash = None #свободные средства
+        self.account = None #депозит
+        self.total_reward = None #итоговая награда
+        self.total_profit = None #прибыль/убыток
+
+        self.first_rendering = None #параметры отрисовки
+        self.history = None #журнал общий
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
         self.action_space.seed(int((self.np_random.uniform(0, seed if seed is not None else 2))))
 
-        self._truncated = False
-        self._current_tick = self._start_tick
-        self._last_trade_tick = None
-        self._position = Positions.No_position
-        self._position_history = [self._position.value for _ in range(self.window_size + 1)]
-        self._total_reward = 0.
-        self._total_profit = 1.  # unit
+        self.truncated = False #сброс флага 
+        self.done = False  #сброс флага 
+        self.current_tick = self.start_tick #текущая цена равна стартовой цене
+        self.last_trade_tick = None
+        self.position = Positions.No_position #сброс состояния портфеля на "нет позиций"
+        self.position_history = [self.position.value for _ in range(self.window_size + 1)] #запись в историю сделок "нет позиции" длиной ширина окна
+
+        self.stocks = 0 #начальное кол-во акций
+        current_price = self.prices[self.current_tick] #цена лота на момент старта
+        self.cash = self.initial_account  #стартовый кэш
+        self.account = self.cash + current_price * self.stocks #депозит как сумма кэша и акций, выраженных в цене
+
+        self.total_reward = 0
+        self.total_profit = 0
+        
         self._first_rendering = True
         self.history = {}
 
@@ -94,54 +112,51 @@ class TradingEnv1(gym.Env):
 
         return observation, info
     
-
     def step(self, action):
-        self._truncated = False
-        self._current_tick += 1
+        self.current_tick += 1
         step_reward = 0
 
-        if self._current_tick == self._end_tick:
-            self._truncated = True
+        if self.current_tick == self.end_tick: #проверка на конец датасета
+            self.done = True
 
-        #если нет окрытых позиций
-        if self._position == Positions.No_position:
-            if action == Actions.Buy.value and not self._truncated:
-                self._position = self._position.opposite()
-                self._last_trade_tick = self._current_tick
-                #step_reward -= self.prices[self._current_tick] * self.amount * 0.001
-            elif action == Actions.Close.value or action == Actions.Hold.value:
-                #step_reward -= self.prices[self._current_tick] * self.amount * 0.01
-                pass
+        if self.account <= self.initial_account / 2: #проверка состояния депозита
+            self.truncated = True
+ 
+        if all([self.position == Positions.No_position, #если нет открытых позиций
+                not self.done,
+                not self.truncated]): 
+            if action == Actions.Buy.value: #если НС предсказывает покупать
+                self.position = self.position.opposite()
+                self.last_trade_tick = self.current_tick
 
+                current_price = self.prices[self.current_tick]
 
-        #если есть окрытые позиции
-        elif self._position == Positions.Long:
-            if action == Actions.Close.value or self._truncated:
-                self._position = self._position.opposite()
+                self.cash -= current_price * (1 + self.trade_fee)
+                self.stocks += 1
+                
+        elif self.position == Positions.Long: #если есть окрытые позиции
+            if any([action == Actions.Close.value, #если НС предсказывает продавать
+                    self.done,
+                    self.truncated]):
+                self.position = self.position.opposite()
 
-                current_price = self.prices[self._current_tick]
-                last_trade_price = self.prices[self._last_trade_tick]
+                current_price = self.prices[self.current_tick]
+                last_trade_price = self.prices[self.last_trade_tick]
                 price_diff = current_price - last_trade_price
+                comission = (current_price  + last_trade_price) * self.trade_fee
+                step_reward += price_diff - comission
 
-                comission = (current_price  + last_trade_price) * self.amount * self.trade_fee
+                self.cash += current_price * (1 - self.trade_fee)
+                self.stocks -= 1
+       
+        self.account = self.cash + self.prices[self.current_tick] * self.stocks #вычисление состояния текущего портфеля
 
-                step_reward += price_diff * self.amount - comission #вычет комиссии
-
-                shares = (self._total_profit * (1 - self.trade_fee)) / last_trade_price
-                self._total_profit = (shares * (1 - self.trade_fee)) * current_price
-
-            elif action == Actions.Hold.value: 
-                #step_reward -= self.prices[self._current_tick] * self.amount * 0.00005
-                pass
-
-            elif action == Actions.Buy.value:
-                #step_reward -= self.prices[self._current_tick] * self.amount * 0.01
-                pass
-
-        self._total_reward += step_reward
+        if any([self.done, self.truncated]): #если конец
+            self.total_profit = self.account / self.initial_account #итоговый доход
 
         #запись истории
-        self._position_history.append(self._position.value)
+        self.total_reward += step_reward
+        self.position_history.append(self.position.value)
 
         observation = self._get_observation()
         info = self._get_info(action)
@@ -150,28 +165,19 @@ class TradingEnv1(gym.Env):
         if self.render_mode == 'human':
             self._render_frame()
 
-        return observation, step_reward, False, self._truncated, info
+        return observation, step_reward, False, self.done, info
 
     def _get_info(self, action):
         return dict(
-            total_reward=self._total_reward,
-            total_profit=self._total_profit,
-            position=self._position.value,
-            actions=action
+            total_reward=self.total_reward,
+            total_profit=self.total_profit,
+            position=self.position.value,
+            action=action
         )
 
-    """def _get_observation(self):
-        obs = self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1]
-        if self._position == Positions.Long:
-            position_column = np.ones(shape=(len(obs), 1))
-        elif self._position == Positions.No_position:
-            position_column = np.zeros(shape=(len(obs), 1))
-        obs = np.concatenate([obs, position_column], axis = 1)
-        return obs.astype(np.float32)"""
-
     def _get_observation(self):
-        obs = self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1]
-        position_column = np.asarray(self._position_history[(self._current_tick-self.window_size+1):self._current_tick+1])[:,np.newaxis]
+        obs = self.signal_features[(self.current_tick-self.window_size+1):self.current_tick+1]
+        position_column = np.asarray(self.position_history[(self.current_tick-self.window_size+1):self.current_tick+1])[:,np.newaxis]
         obs = np.concatenate([obs, position_column], axis = 1)
         return obs.astype(np.float32)
 
@@ -202,14 +208,14 @@ class TradingEnv1(gym.Env):
             self._first_rendering = False
             plt.cla()
             plt.plot(self.prices)
-            start_position = self._position_history[self._start_tick]
-            _plot_position(start_position, self._start_tick)
+            start_position = self.position_history[self.start_tick]
+            _plot_position(start_position, self.start_tick)
 
-        _plot_position(self._position, self._current_tick)
+        _plot_position(self.position, self.current_tick)
 
         plt.suptitle(
-            "Total Reward: %.6f" % self._total_reward + ' ~ ' +
-            "Total Profit: %.6f" % self._total_profit
+            "Total Reward: %.6f" % self.total_reward + ' ~ ' +
+            "Total Profit: %.6f" % self.total_profit
         )
 
         end_time = time()
@@ -221,15 +227,15 @@ class TradingEnv1(gym.Env):
         plt.pause(pause_time)
 
     def render_all(self, title=None):
-        window_ticks = np.arange(len(self._position_history))
+        window_ticks = np.arange(len(self.position_history))
         plt.plot(self.prices)
 
         short_ticks = []
         long_ticks = []
         for i, tick in enumerate(window_ticks):
-            if self._position_history[i] == Positions.No_position.value:
+            if self.position_history[i] == Positions.No_position.value:
                 short_ticks.append(tick)
-            elif self._position_history[i] == Positions.Long.value:
+            elif self.position_history[i] == Positions.Long.value:
                 long_ticks.append(tick)
 
         plt.plot(short_ticks, self.prices[short_ticks], 'ro')
@@ -239,8 +245,8 @@ class TradingEnv1(gym.Env):
             plt.title(title)
 
         plt.suptitle(
-            "Total Reward: %.6f" % self._total_reward + ' ~ ' +
-            "Total Profit: %.6f" % self._total_profit
+            "Total Reward: %.6f" % self.total_reward + ' ~ ' +
+            "Total Profit: %.6f" % self.total_profit
         )
 
     def close(self):

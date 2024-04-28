@@ -9,8 +9,7 @@ from typing import Tuple
 
 import gymnasium as gym
 
-
-"""Награда только за изменение вариационной маржи"""
+"""Награда за изменение вариационной маржи и прибыл/убыток от сделки"""
 
 class Actions(Enum):
     Buy = 0
@@ -26,7 +25,7 @@ class Positions(Enum):
         return Positions.Long if self == Positions.No_position else Positions.No_position
 
 
-class CryptoEnvV1(gym.Env):
+class CryptoEnvV3(gym.Env):
     metadata = {'render_modes': ['human'], 'render_fps': 3}
     def __init__(self, 
                  dataframe: pd.DataFrame, 
@@ -115,6 +114,7 @@ class CryptoEnvV1(gym.Env):
     
     def step(self, action):
         self.current_tick += 1
+        close_deal_reward = 0
 
         if self.current_tick == self.end_tick: #проверка на конец датасета
             self.done = True
@@ -139,12 +139,18 @@ class CryptoEnvV1(gym.Env):
                     self.done,
                     self.truncated]):
                 self.position = self.position.opposite()
+
                 current_price = self.prices[self.current_tick]
+                last_trade_price = self.prices[self.last_trade_tick]
+                price_diff = current_price - last_trade_price
+                comission = (current_price  + last_trade_price) * self.trade_fee
+                close_deal_reward += price_diff - comission
+
                 self.cash += current_price * (1 - self.trade_fee)
                 self.stocks -= 1
        
         next_account = self.cash + self.prices[self.current_tick] * self.stocks #вычисление состояния текущего портфеля
-        step_reward = (next_account - self.account)#расчет вознаграждения, как величина изменения портфеля
+        step_reward = (next_account - self.account) + close_deal_reward#расчет вознаграждения, как величина изменения портфеля
         self.account = next_account #перезапись состояния портфеля на новый
 
         if any([self.done, self.truncated]): #если конец

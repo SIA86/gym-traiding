@@ -7,7 +7,19 @@ register(
 )
 
 register(
-     id="CryptoMono-v1",
-     entry_point="gym_examples.envs:TradingEnv1",
+     id="Env-v2",
+     entry_point="gym_examples.envs:CryptoEnvV2",
+     max_episode_steps=1e5,
+)
+
+register(
+     id="Env-v3",
+     entry_point="gym_examples.envs:CryptoEnvV3",
+     max_episode_steps=1e5,
+)
+
+register(
+     id="Env-v4",
+     entry_point="gym_examples.envs:CryptoEnvV4",
      max_episode_steps=1e5,
 )
