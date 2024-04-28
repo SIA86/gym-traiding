@@ -80,14 +80,14 @@ class TradingEnv1(gym.Env):
         self._current_tick = self._start_tick
         self._last_trade_tick = None
         self._position = Positions.No_position
-        self._position_history = (self.window_size * [None]) + [self._position]
+        self._position_history = [self._position.value for _ in range(self.window_size + 1)]
         self._total_reward = 0.
         self._total_profit = 1.  # unit
         self._first_rendering = True
         self.history = {}
 
         observation = self._get_observation()
-        info = self._get_info()
+        info = self._get_info(None)
 
         if self.render_mode == 'human':
             self._render_frame()
@@ -108,7 +108,7 @@ class TradingEnv1(gym.Env):
             if action == Actions.Buy.value and not self._truncated:
                 self._position = self._position.opposite()
                 self._last_trade_tick = self._current_tick
-                #step_reward += self.prices[self._current_tick] * self.amount * 0.0001
+                #step_reward -= self.prices[self._current_tick] * self.amount * 0.001
             elif action == Actions.Close.value or action == Actions.Hold.value:
                 #step_reward -= self.prices[self._current_tick] * self.amount * 0.01
                 pass
@@ -122,10 +122,10 @@ class TradingEnv1(gym.Env):
                 current_price = self.prices[self._current_tick]
                 last_trade_price = self.prices[self._last_trade_tick]
                 price_diff = current_price - last_trade_price
-                duration = self._current_tick - self._last_trade_tick
-                #comission = (current_price  + last_trade_price) * self.amount * self.trade_fee
 
-                step_reward += (0.999 ** duration) * price_diff * self.amount# - comission #вычет комиссии
+                comission = (current_price  + last_trade_price) * self.amount * self.trade_fee
+
+                step_reward += price_diff * self.amount - comission #вычет комиссии
 
                 shares = (self._total_profit * (1 - self.trade_fee)) / last_trade_price
                 self._total_profit = (shares * (1 - self.trade_fee)) * current_price
@@ -141,10 +141,10 @@ class TradingEnv1(gym.Env):
         self._total_reward += step_reward
 
         #запись истории
-        self._position_history.append(self._position)
+        self._position_history.append(self._position.value)
 
         observation = self._get_observation()
-        info = self._get_info()
+        info = self._get_info(action)
         self._update_history(info)
 
         if self.render_mode == 'human':
@@ -152,19 +152,26 @@ class TradingEnv1(gym.Env):
 
         return observation, step_reward, False, self._truncated, info
 
-    def _get_info(self):
+    def _get_info(self, action):
         return dict(
             total_reward=self._total_reward,
             total_profit=self._total_profit,
-            position=self._position
+            position=self._position.value,
+            actions=action
         )
 
-    def _get_observation(self):
+    """def _get_observation(self):
         obs = self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1]
         if self._position == Positions.Long:
             position_column = np.ones(shape=(len(obs), 1))
         elif self._position == Positions.No_position:
             position_column = np.zeros(shape=(len(obs), 1))
+        obs = np.concatenate([obs, position_column], axis = 1)
+        return obs.astype(np.float32)"""
+
+    def _get_observation(self):
+        obs = self.signal_features[(self._current_tick-self.window_size+1):self._current_tick+1]
+        position_column = np.asarray(self._position_history[(self._current_tick-self.window_size+1):self._current_tick+1])[:,np.newaxis]
         obs = np.concatenate([obs, position_column], axis = 1)
         return obs.astype(np.float32)
 
@@ -220,9 +227,9 @@ class TradingEnv1(gym.Env):
         short_ticks = []
         long_ticks = []
         for i, tick in enumerate(window_ticks):
-            if self._position_history[i] == Positions.No_position:
+            if self._position_history[i] == Positions.No_position.value:
                 short_ticks.append(tick)
-            elif self._position_history[i] == Positions.Long:
+            elif self._position_history[i] == Positions.Long.value:
                 long_ticks.append(tick)
 
         plt.plot(short_ticks, self.prices[short_ticks], 'ro')
