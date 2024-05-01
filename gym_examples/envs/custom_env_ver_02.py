@@ -263,7 +263,7 @@ class CryptoEnvV2(gym.Env):
     def _process_data(self):
         normalizer = Normalizer()
         df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
-        prices = df.loc[:,'close'].to_numpy()
+        prices = df.loc[:,'Price_close'].to_numpy()
 
         signal_features = df.loc[:,self.features_names]
         signal_categories = df.loc[:,self.categories]
