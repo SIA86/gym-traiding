@@ -64,7 +64,7 @@ class CryptoEnvV3(gym.Env):
         # spaces
         self.action_space = gym.spaces.Discrete(len(Actions))
         self.observation_space = gym.spaces.Box(
-            low=0, high=1, shape=self.shape, dtype=np.float32,
+            low=-1, high=1, shape=self.shape, dtype=np.float32,
         )
 
         #парметры эпизода
