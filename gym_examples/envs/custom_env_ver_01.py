@@ -10,7 +10,7 @@ from typing import Tuple
 import gymnasium as gym
 
 
-"""Награда только за изменение вариационной маржи"""
+"""Награда только за изменение вариационной маржи 1.056/1.09"""
 
 class Actions(Enum):
     Buy = 0
@@ -32,6 +32,7 @@ class CryptoEnvV1(gym.Env):
                  dataframe: pd.DataFrame, 
                  window_size: int,
                  features_names: list[str], 
+                 categories_names: list[str],
                  frame_bound: tuple[int, int],
                  #config
                  trade_fee: float = 0.001,
@@ -49,6 +50,7 @@ class CryptoEnvV1(gym.Env):
         self.df = dataframe
         self.window_size = window_size
         self.features_names = features_names
+        self.categories = categories_names
         self.frame_bound = frame_bound
 
         self.prices, self.signal_features = self._process_data()
@@ -258,11 +260,16 @@ class CryptoEnvV1(gym.Env):
         normalizer = Normalizer()
         df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
         prices = df.loc[:,'close'].to_numpy()
-        signal_features = df.loc[:,self.features_names]
-        norm_signal_features, _ = normalizer.norm_minmax(df_x=signal_features, scale=(0,1))
-        norm_signal_features = norm_signal_features.to_numpy()
 
-        return prices.astype(np.float32), norm_signal_features.astype(np.float32)
+        signal_features = df.loc[:,self.features_names]
+        signal_categories = df.loc[:,self.categories]
+
+        norm_signal_features, _ = normalizer.norm_minmax(df_x=signal_features, scale=(0,1))
+
+        norm_signal = pd.concat([norm_signal_features, signal_categories], axis=1)
+        norm_signal = norm_signal.to_numpy()
+
+        return prices.astype(np.float32), norm_signal.astype(np.float32)
 
 
 class Normalizer():
