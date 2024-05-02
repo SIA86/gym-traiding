@@ -36,6 +36,7 @@ class CryptoEnvV3(gym.Env):
                  #config
                  trade_fee: float = 0.001,
                  initial_account: float = 100000.0,
+                 quantity: int = 1,                 
                  render_mode=None,
                  **kwargs
                  ):
@@ -51,6 +52,7 @@ class CryptoEnvV3(gym.Env):
         self.features_names = features_names
         self.categories = categories_names
         self.frame_bound = frame_bound
+        self.quantity = quantity
 
         self.prices, self.signal_features = self._process_data()
         self.shape = (window_size, self.signal_features.shape[1] + 1) #+1 потому то добавляю инф о том есть ли позиции
@@ -133,8 +135,8 @@ class CryptoEnvV3(gym.Env):
 
                 current_price = self.prices[self.current_tick]
 
-                self.cash -= current_price * (1 + self.trade_fee)
-                self.stocks += 1
+                self.cash -= current_price * self.quantity * (1 + self.trade_fee)
+                self.stocks += self.quantity
                 
         elif self.position == Positions.Long: #если есть окрытые позиции
             if any([action == Actions.Close.value, #если НС предсказывает продавать
@@ -147,9 +149,9 @@ class CryptoEnvV3(gym.Env):
                 price_diff = current_price - last_trade_price
                 comission = (current_price  + last_trade_price) * self.trade_fee
                 close_deal_reward += price_diff - comission
-
-                self.cash += current_price * (1 - self.trade_fee)
-                self.stocks -= 1
+                
+                self.cash += current_price * self.quantity * (1 - self.trade_fee)
+                self.stocks -= self.quantity
        
         next_account = self.cash + self.prices[self.current_tick] * self.stocks #вычисление состояния текущего портфеля
         step_reward = (next_account - self.account) + close_deal_reward#расчет вознаграждения, как величина изменения портфеля
