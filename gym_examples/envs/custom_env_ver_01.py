@@ -8,6 +8,7 @@ import pandas as pd
 from typing import Tuple
 
 import gymnasium as gym
+from sklearn.preprocessing import QuantileTransformer
 
 
 """Награда только за изменение вариационной маржи 1.056/1.09"""
@@ -32,7 +33,6 @@ class CryptoEnvV1(gym.Env):
                  dataframe: pd.DataFrame, 
                  window_size: int,
                  features_names: list[str], 
-                 categories_names: list[str],
                  frame_bound: tuple[int, int],
                  #config
                  trade_fee: float = 0.001,
@@ -51,7 +51,6 @@ class CryptoEnvV1(gym.Env):
         self.df = dataframe
         self.window_size = window_size
         self.features_names = features_names
-        self.categories = categories_names
         self.frame_bound = frame_bound
 
         self.prices, self.signal_features = self._process_data()
@@ -67,7 +66,7 @@ class CryptoEnvV1(gym.Env):
         # spaces
         self.action_space = gym.spaces.Discrete(len(Actions))
         self.observation_space = gym.spaces.Box(
-            low=-1, high=1, shape=self.shape, dtype=np.float32,
+            low=-10000, high=10000, shape=self.shape, dtype=np.float32,
         )
 
         #парметры эпизода
@@ -177,8 +176,8 @@ class CryptoEnvV1(gym.Env):
 
     def _get_observation(self):
         obs = self.signal_features[(self.current_tick-self.window_size+1):self.current_tick+1]
-        position_column = np.asarray(self.position_history[(self.current_tick-self.window_size+1):self.current_tick+1])[:,np.newaxis]
-        obs = np.concatenate([obs, position_column], axis = 1)
+        #position_column = np.asarray(self.position_history[(self.current_tick-self.window_size+1):self.current_tick+1])[:,np.newaxis]
+        #obs = np.concatenate([obs, position_column], axis = 1)
         return obs.astype(np.float32)
 
     def _update_history(self, info):
@@ -259,57 +258,10 @@ class CryptoEnvV1(gym.Env):
         plt.show()
 
     def _process_data(self):
-        normalizer = Normalizer()
+        quantile_transformer = QuantileTransformer(output_distribution='normal', random_state=0)
         df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
         prices = df.loc[:,'Price_close'].to_numpy()
+        signal_features = df.loc[:,self.features_names].to_numpy()
+        signal_features = quantile_transformer.fit_transform(signal_features)
 
-        signal_features = df.loc[:,self.features_names]
-        signal_categories = df.loc[:,self.categories]
-
-        norm_signal_features, _ = normalizer.norm_minmax(df_x=signal_features, scale=(0,1))
-
-        norm_signal = pd.concat([norm_signal_features, signal_categories], axis=1)
-        norm_signal = norm_signal.to_numpy()
-
-        return prices.astype(np.float32), norm_signal.astype(np.float32)
-
-
-class Normalizer():
-    def __init__(self):
-        self.min = None
-        self.max = None
-    
-    def norm_minmax(self, 
-                    df_x: pd.DataFrame = None, 
-                    df_y: pd.DataFrame | None = None, 
-                    scale: tuple[int, int] = (0, 1)
-                    ) -> tuple[pd.DataFrame, pd.DataFrame | None]: 
-        self.a, self.b = scale 
-        if df_x is not None:
-            self.min = df_x.min() 
-            self.max = df_x.max() + 0.00001 #для избегания ошибки деления на ноль
-            df_x = (self.b - self.a) * (df_x - self.min) / (self.max - self.min) + self.a
-        else:
-            raise TypeError('Data must be pd.DataFrame format')    
-        if df_y is not None:
-            col = df_y.columns
-            df_y = (self.b - self.a) * (df_y - self.min[col]) / (self.max[col] - self.min[col]) + self.a  
-
-        return df_x, df_y
-
-    def denorm_minmax(self,
-                      df_x: pd.DataFrame | None = None, 
-                      df_y: pd.DataFrame | None = None,
-                      ) -> Tuple[pd.DataFrame | None, pd.DataFrame | None]:         
-        if self.min is not None and self.max is not None:
-            if df_x is not None:
-                df_x = (df_x - self.a) * (self.max-self.min) / (self.b - self.a) + self.min
-            if df_y is not None:
-                col = df_y.columns
-                df_y = (df_y - self.a) * (self.max[col]-self.min[col]) / (self.b - self.a) + self.min[col]
-        else:
-            raise ValueError("No normalization parametrs found" )
-        
-        return df_x, df_y
-    
-
+        return prices.astype(np.float32), signal_features.astype(np.float32)

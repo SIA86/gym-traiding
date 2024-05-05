@@ -7,5 +7,7 @@ gym_examples.egg-info/dependency_links.txt
 gym_examples.egg-info/requires.txt
 gym_examples.egg-info/top_level.txt
 gym_examples/envs/__init__.py
-gym_examples/envs/crypto_mono_1.py
 gym_examples/envs/custom_env_ver_01.py
+gym_examples/envs/custom_env_ver_02.py
+gym_examples/envs/custom_env_ver_03.py
+gym_examples/envs/custom_env_ver_04.py
