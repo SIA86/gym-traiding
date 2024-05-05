@@ -54,7 +54,7 @@ class CryptoEnvV1(gym.Env):
         self.frame_bound = frame_bound
 
         self.prices, self.signal_features = self._process_data()
-        self.shape = (window_size, self.signal_features.shape[1] + 1) #+1 потому то добавляю инф о том есть ли позиции
+        self.shape = (window_size, self.signal_features.shape[1]) #+1 потому то добавляю инф о том есть ли позиции
 
         #параметры портфеля
         self.trade_fee = trade_fee
