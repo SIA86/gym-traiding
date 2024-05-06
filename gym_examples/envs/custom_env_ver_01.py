@@ -265,7 +265,7 @@ class CryptoEnvQuantile_v1(gym.Env):
         return prices.astype(np.float32), signal_features.astype(np.float32)
     
 
-class CryptoEnvMinMaxScaler_v2(CryptoEnvQuantile_v1):
+class CryptoEnvMinMaxScaler_v1(CryptoEnvQuantile_v1):
     def _process_data(self):
         scaler = MinMaxScaler()
         df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
