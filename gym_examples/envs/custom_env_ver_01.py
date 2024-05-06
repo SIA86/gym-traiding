@@ -1,17 +1,15 @@
+"""Награда только за изменение вариационной маржи."""
+
 from time import time
 from enum import Enum
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Tuple
-
+from sklearn.preprocessing import QuantileTransformer, MinMaxScaler
 import gymnasium as gym
-from sklearn.preprocessing import QuantileTransformer
 
-
-"""Награда только за изменение вариационной маржи 1.056/1.09"""
 
 class Actions(Enum):
     Buy = 0
@@ -27,17 +25,18 @@ class Positions(Enum):
         return Positions.Long if self == Positions.No_position else Positions.No_position
 
 
-class CryptoEnvV1(gym.Env):
+class CryptoEnvQuantile_v1(gym.Env):
     metadata = {'render_modes': ['human'], 'render_fps': 3}
     def __init__(self, 
                  dataframe: pd.DataFrame, 
                  window_size: int,
-                 features_names: list[str], 
-                 frame_bound: tuple[int, int],
-                 #config
+                 frame_bound: Tuple[int, int],
+                 features_names: list[str] = '',
+                 price_type: str = 'Price_close',
                  trade_fee: float = 0.001,
                  initial_account: float = 100000.0,
                  quantity: int = 1,
+                 add_positions_info: bool = False,
                  render_mode=None,
                  **kwargs
                  ):
@@ -46,15 +45,17 @@ class CryptoEnvV1(gym.Env):
         assert render_mode is None or render_mode in self.metadata['render_modes']
 
         self.render_mode = render_mode
+        self.add_positions_info = add_positions_info
 
         #параметры данных
         self.df = dataframe
         self.window_size = window_size
-        self.features_names = features_names
         self.frame_bound = frame_bound
+        self.features_names = features_names
+        self.price_type = price_type
 
         self.prices, self.signal_features = self._process_data()
-        self.shape = (window_size, self.signal_features.shape[1]) #+1 потому то добавляю инф о том есть ли позиции
+        self.shape = (window_size, self.signal_features.shape[1] + int(self.add_positions_info))
 
         #параметры портфеля
         self.trade_fee = trade_fee
@@ -66,17 +67,17 @@ class CryptoEnvV1(gym.Env):
         # spaces
         self.action_space = gym.spaces.Discrete(len(Actions))
         self.observation_space = gym.spaces.Box(
-            low=-10000, high=10000, shape=self.shape, dtype=np.float32,
+            low=-1000, high=1000, shape=self.shape, dtype=np.float32,
         )
 
         #парметры эпизода
         self.truncated = None #флаг на случай если депозит уходит в ноль или ниже разрешенного уровня
         self.done = None #флаг сигнализирующий о конце датасета
         self.current_tick = None #номер текущей свечи в последовательности
-        self.last_trade_tick = None
+        self.last_trade_tick = None #цена последней сделки
         self.position = None #флаг сигнализируещеей о наличии открытой позиции
         self.position_history = None #журнал сделок
-        self.lots = None #кол-во лотов в портфеле
+        self.coins = None #кол-во лотов в портфеле
     
         self.cash = None #свободные средства
         self.account = None #депозит
@@ -93,14 +94,14 @@ class CryptoEnvV1(gym.Env):
         self.truncated = False #сброс флага 
         self.done = False  #сброс флага 
         self.current_tick = self.start_tick #текущая цена равна стартовой цене
-        self.last_trade_tick = None
+        self.last_trade_tick = None #индекс последней сделки
         self.position = Positions.No_position #сброс состояния портфеля на "нет позиций"
         self.position_history = [self.position.value for _ in range(self.window_size + 1)] #запись в историю сделок "нет позиции" длиной ширина окна
 
-        self.stocks = 0 #начальное кол-во акций
-        current_price = self.prices[self.current_tick] #цена лота на момент старта
+        self.coins = 0 #начальное кол-во монет
+        current_price = self.prices[self.current_tick] #цена монеты на момент старта
         self.cash = self.initial_account  #стартовый кэш
-        self.account = self.cash + current_price * self.stocks #депозит как сумма кэша и акций, выраженных в цене
+        self.account = self.cash + current_price * self.coins #депозит как сумма кэша и акций, выраженных в цене
 
         self.total_reward = 0
         self.total_profit = 0
@@ -122,20 +123,17 @@ class CryptoEnvV1(gym.Env):
         if self.current_tick == self.end_tick: #проверка на конец датасета
             self.done = True
 
-        if self.account <= self.initial_account / 2: #проверка состояния депозита
-            self.truncated = True
+        if self.account <= self.initial_account / 3: #проверка состояния депозита
+            self.truncated = True #если просадка больше 33,3%, то торговля заканчивается
  
         if all([self.position == Positions.No_position, #если нет открытых позиций
                 not self.done,
                 not self.truncated]): 
             if action == Actions.Buy.value: #если НС предсказывает покупать
                 self.position = self.position.opposite()
-                self.last_trade_tick = self.current_tick
-
                 current_price = self.prices[self.current_tick]
-
                 self.cash -= current_price * self.quantity * (1 + self.trade_fee)
-                self.stocks += self.quantity
+                self.coins += self.quantity
                 
         elif self.position == Positions.Long: #если есть окрытые позиции
             if any([action == Actions.Close.value, #если НС предсказывает продавать
@@ -144,9 +142,9 @@ class CryptoEnvV1(gym.Env):
                 self.position = self.position.opposite()
                 current_price = self.prices[self.current_tick]
                 self.cash += current_price * self.quantity * (1 - self.trade_fee)
-                self.stocks -= self.quantity
+                self.coins -= self.quantity
        
-        next_account = self.cash + self.prices[self.current_tick] * self.stocks #вычисление состояния текущего портфеля
+        next_account = self.cash + self.prices[self.current_tick] * self.coins #вычисление состояния текущего портфеля
         step_reward = (next_account - self.account)#расчет вознаграждения, как величина изменения портфеля
         self.account = next_account #перезапись состояния портфеля на новый
 
@@ -171,13 +169,14 @@ class CryptoEnvV1(gym.Env):
             total_reward=self.total_reward,
             total_profit=self.total_profit,
             position=self.position.value,
-            action=action
+            actions=action
         )
 
     def _get_observation(self):
-        obs = self.signal_features[(self.current_tick-self.window_size+1):self.current_tick+1]
-        #position_column = np.asarray(self.position_history[(self.current_tick-self.window_size+1):self.current_tick+1])[:,np.newaxis]
-        #obs = np.concatenate([obs, position_column], axis = 1)
+        obs = self.signal_features[(self.current_tick-self.window_size):self.current_tick]
+        if self.add_positions_info:
+            position_column = np.asarray(self.position_history[(self.current_tick-self.window_size):self.current_tick])[:,np.newaxis]
+            obs = np.concatenate([obs, position_column], axis = 1)
         return obs.astype(np.float32)
 
     def _update_history(self, info):
@@ -191,7 +190,6 @@ class CryptoEnvV1(gym.Env):
         self.render()
 
     def render(self, mode='human'):
-
         def _plot_position(position, tick):
             color = None
             if position == Positions.No_position:
@@ -260,8 +258,19 @@ class CryptoEnvV1(gym.Env):
     def _process_data(self):
         quantile_transformer = QuantileTransformer(output_distribution='normal', random_state=0)
         df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
-        prices = df.loc[:,'Price_close'].to_numpy()
+        prices = df.loc[:,self.price_type].to_numpy()
         signal_features = df.loc[:,self.features_names].to_numpy()
         signal_features = quantile_transformer.fit_transform(signal_features)
+
+        return prices.astype(np.float32), signal_features.astype(np.float32)
+    
+
+class CryptoEnvMinMaxScaler_v2(CryptoEnvQuantile_v1):
+    def _process_data(self):
+        scaler = MinMaxScaler()
+        df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
+        prices = df.loc[:,self.price_type].to_numpy()
+        signal_features = df.loc[:,self.features_names].to_numpy()
+        signal_features = scaler.fit_transform(signal_features)
 
         return prices.astype(np.float32), signal_features.astype(np.float32)

@@ -1,4 +1,2 @@
-from .custom_env_ver_01 import CryptoEnvV1
-from .custom_env_ver_02 import CryptoEnvV2
-from .custom_env_ver_03 import CryptoEnvV3
-from .custom_env_ver_04 import CryptoEnvV4
+from .custom_env_ver_01 import CryptoEnvQuantile_v1, CryptoEnvMinMaxScaler_v1
+from .custom_env_ver_02 import CryptoEnvQuantile_v2, CryptoEnvMinMaxScaler_v2

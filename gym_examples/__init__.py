@@ -1,25 +1,25 @@
 from gymnasium.envs.registration import register
 
 register(
-     id="Env-v1",
-     entry_point="gym_examples.envs:CryptoEnvV1",
-     max_episode_steps=1e5,
+     id="CryptoEnvQuantile-v1",
+     entry_point="gym_examples.envs:CryptoEnvQuantile_v1",
+     max_episode_steps=1e6,
 )
 
 register(
-     id="Env-v2",
-     entry_point="gym_examples.envs:CryptoEnvV2",
-     max_episode_steps=1e5,
+     id="CryptoEnvMinMaxScaler-v1",
+     entry_point="gym_examples.envs:CryptoEnvMinMaxScaler_v1",
+     max_episode_steps=1e6,
 )
 
 register(
-     id="Env-v3",
-     entry_point="gym_examples.envs:CryptoEnvV3",
-     max_episode_steps=1e5,
+     id="CryptoEnvQuantile-v2",
+     entry_point="gym_examples.envs:CryptoEnvQuantile_v2",
+     max_episode_steps=1e6,
 )
 
 register(
-     id="Env-v4",
-     entry_point="gym_examples.envs:CryptoEnvV4",
-     max_episode_steps=1e5,
+     id="CryptoEnvMinMaxScaler-v2",
+     entry_point="gym_examples.envs:CryptoEnvMinMaxScaler_v2",
+     max_episode_steps=1e6,
 )
