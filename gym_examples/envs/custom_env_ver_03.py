@@ -169,6 +169,7 @@ class CryptoEnvQuantile_v3(gym.Env):
                 self.position = Positions.No_position
                 buy_price = self.prices[self.last_buy_tick]
                 comission = (current_price + buy_price) * self.trade_fee * self.coins
+                self.cash += current_price * self.coins * (1 + self.trade_fee)
 
                 step_reward += (current_price - buy_price) * self.coins - comission
 
@@ -190,7 +191,8 @@ class CryptoEnvQuantile_v3(gym.Env):
                 self.position = Positions.No_position
                 sell_price = self.prices[self.last_sell_tick]
                 comission = (current_price + sell_price) * self.trade_fee * self.coins
-
+                self.cash -= current_price * self.coins * (1 + self.trade_fee)
+                
                 step_reward += (sell_price - current_price) * self.coins - comission
 
             elif action == Actions.Hold.value:
