@@ -223,14 +223,16 @@ class CryptoEnvQuantile_v3(gym.Env):
                     step_penalty += current_price * self.coins * 0.01 #расчет штрафа
             elif action == Actions.Do_nothing.value: #если НС предсказывает ничего не делать
                 pass
-       
+
         next_account = self.cash + current_price * self.coins #вычисление состояния текущего портфеля
+
         if self.position == Positions.Short:
-            step_reward += (self.account - next_account) + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
+            short_variational = self.account - next_account
+            step_reward += short_variational + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
+            self.account = self.account + short_variational #перезапись состояния портфеля на новый
         else:
             step_reward += (next_account - self.account) + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
-  
-        self.account = next_account #перезапись состояния портфеля на новый
+            self.account = next_account #перезапись состояния портфеля на новый
 
         if any([self.done, self.truncated]): #если конец
             self.total_profit = self.account / self.initial_account #итоговый доход
