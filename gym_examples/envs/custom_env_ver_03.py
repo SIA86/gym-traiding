@@ -166,6 +166,7 @@ class CryptoEnvQuantile_v3(gym.Env):
             elif action == Actions.Sell.value: #если НС предсказывает покупать
                 pass           
             elif action == Actions.Close_long.value: #если НС предсказывает покупать
+                self.position = Positions.No_position
                 buy_price = self.prices[self.last_buy_tick]
                 comission = (current_price + buy_price) * self.trade_fee * self.coins
 
@@ -186,6 +187,7 @@ class CryptoEnvQuantile_v3(gym.Env):
             elif action == Actions.Close_long.value: #если НС предсказывает покупать
                 pass
             elif action == Actions.Close_short.value:
+                self.position = Positions.No_position
                 sell_price = self.prices[self.last_sell_tick]
                 comission = (current_price + sell_price) * self.trade_fee * self.coins
 
@@ -293,9 +295,9 @@ class CryptoEnvQuantile_v3(gym.Env):
             elif self.position_history[i] == Positions.Short.value:
                 short_ticks.append(tick)
 
-        plt.plot(short_ticks, self.prices[short_ticks], 'red')
-        plt.plot(long_ticks, self.prices[long_ticks], 'green')
-        plt.plot(no_position_ticks, self.prices[no_position_ticks], 'gray')
+        plt.plot(short_ticks, self.prices[short_ticks], 'ro')
+        plt.plot(long_ticks, self.prices[long_ticks], 'go')
+        plt.plot(no_position_ticks, self.prices[no_position_ticks], 'bo')
 
         if title:
             plt.title(title)
