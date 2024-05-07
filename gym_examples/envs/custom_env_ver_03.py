@@ -177,12 +177,15 @@ class CryptoEnvQuantile_v3(gym.Env):
                 pass
             elif action == Actions.Sell.value: #если НС предсказывает продавать
                 pass           
-            elif action == Actions.Close_long.value: #если НС предсказывает закрыть лонг
+            elif any([action == Actions.Close_long.value,                               
+                    self.done,
+                    self.truncated]): #если НС предсказывает закрыть лонг
                 self.position = Positions.No_position #меняем позицию на нет позиций
                 self.hold_duration = 0 #сбрасываем счетчик удержания
                 buy_price = self.prices[self.last_buy_tick] #определяем цену входа в лонг по индексу
                 comission = (current_price + buy_price) * self.trade_fee * self.coins #расчет комиссии
                 self.cash += current_price * self.coins * (1 + self.trade_fee) #рачет свободных средств
+                self.coins = 0
 
                 step_reward += (current_price - buy_price) * self.coins - comission #расчет награды, как профит
 
@@ -195,7 +198,9 @@ class CryptoEnvQuantile_v3(gym.Env):
             elif action == Actions.Do_nothing.value: #если НС предсказывает ничего не делать
                 pass
 
-        elif self.position == Positions.Short: #если есть окрытые позиции
+        elif any([self.position == Positions.Short,
+                  self.done,
+                  self.truncated]): #если есть окрытые позиции
             if action == Actions.Buy.value: #если НС предсказывает покупать
                 pass
             elif action == Actions.Sell.value: #если НС предсказывает покупать
@@ -208,6 +213,7 @@ class CryptoEnvQuantile_v3(gym.Env):
                 sell_price = self.prices[self.last_sell_tick] #определяем цену входа в шорт по индексу
                 comission = (current_price + sell_price) * self.trade_fee * self.coins #расчет комиссии
                 self.cash -= current_price * self.coins * (1 + self.trade_fee) #расчет свободных средств
+                self.coins = 0
 
                 step_reward += (sell_price - current_price) * self.coins - comission #расчет награды, как профит
 
@@ -240,7 +246,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         if self.render_mode == 'human':
             self._render_frame()
 
-        return observation, step_reward, False, self.done, info
+        return observation, step_reward, self.truncated, self.done, info
 
     def _get_info(self, action):
         return dict(
