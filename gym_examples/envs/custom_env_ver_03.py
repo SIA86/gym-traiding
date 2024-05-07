@@ -148,7 +148,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         if all([self.position == Positions.No_position, #если нет открытых позиций
                 not self.done,
                 not self.truncated]): 
-            self.coins += int(self.single_lot / current_price)
+            self.coins = int(self.single_lot / current_price)
             if action == Actions.Buy.value: #если НС предсказывает покупать
                 self.position = Positions.Long #меняем позицию на лонг
                 self.do_nothing_duration = 0 #сбрасываем счетчик длительности
@@ -219,7 +219,11 @@ class CryptoEnvQuantile_v3(gym.Env):
                 pass
        
         next_account = self.cash + current_price * self.coins #вычисление состояния текущего портфеля
-        step_reward += (next_account - self.account) + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
+        if self.position == Positions.Short:
+            step_reward += (self.account - next_account) + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
+        else:
+            step_reward += (next_account - self.account) + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
+  
         self.account = next_account #перезапись состояния портфеля на новый
 
         if any([self.done, self.truncated]): #если конец
