@@ -18,7 +18,6 @@ class Actions(Enum):
     Do_nothing = 5
 
 
-
 class Positions(Enum):
     No_position = 0
     Long = 1
@@ -37,8 +36,8 @@ class CryptoEnvQuantile_v3(gym.Env):
                  initial_account: float = 100000.0,
                  max_loss: float = 0.25,
                  single_lot: int = 1000,
-                 max_hold_duration: int = 1200,
-                 max_do_nothing_duration: int = 600,
+                 max_hold_duration: int = 600,
+                 max_do_nothing_duration: int = 1200,
                  add_positions_info: bool = False,
                  render_mode=None,
                  **kwargs
@@ -138,6 +137,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         step_bonus_rew = 0
         step_penalty = 0
         current_price = self.prices[self.current_tick]
+        quantity = int(self.single_lot / current_price * 100) / 100
 
         if self.current_tick == self.end_tick: #проверка на конец датасета
             self.done = True
@@ -148,36 +148,32 @@ class CryptoEnvQuantile_v3(gym.Env):
         if all([self.position == Positions.No_position, #если нет открытых позиций
                 not self.done,
                 not self.truncated]): 
-            self.coins = int(self.single_lot / current_price)
+
             if action == Actions.Buy.value: #если НС предсказывает покупать
                 self.position = Positions.Long #меняем позицию на лонг
                 self.do_nothing_duration = 0 #сбрасываем счетчик длительности
-                self.cash -= current_price * self.coins * (1 + self.trade_fee) #расчитываем свободные средства
+                self.cash -= current_price * quantity * (1 + self.trade_fee) #расчитываем свободные средства
+                self.coins += quantity
                 self.last_buy_tick = self.current_tick #сохраняем индекс свечи, когда была покупка
             
             elif action == Actions.Sell.value: #если НС предсказывает покупать
                 self.position = Positions.Short #меняем позицию на шорт
                 self.do_nothing_duration = 0  #сбрасываем счетчик длительности
-                self.cash -= current_price * self.coins * (1 + self.trade_fee) #расчитываем свободные средства
+                self.cash -= current_price * quantity * (1 + self.trade_fee) #расчитываем свободные средства
+                self.coins += quantity
                 self.last_sell_tick = self.current_tick #сохраняем индекс свечи, когда была продажа
 
             elif action == Actions.Close_long.value: #если НС предсказывает закрыть лонг
-                pass
+                self.do_nothing_duration += 1
             elif action == Actions.Close_short.value:  #если НС предсказывает закрыть шорт
-                pass
+                self.do_nothing_duration += 1
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
-                pass
-            elif action == Actions.Do_nothing.value: #если НС предсказывает ничего не делать
                 self.do_nothing_duration += 1 #считаем длительность 
-                if self.do_nothing_duration >= self.max_do_nothing_duration: #если бездействие дольше максимального значения
-                    step_penalty += current_price * self.coins * 0.01 #штрафуем НС
-
-        elif self.position == Positions.Long: #если есть long positions
-            if action == Actions.Buy.value: #если НС предсказывает покупать
-                pass
-            elif action == Actions.Sell.value: #если НС предсказывает продавать
-                pass           
-            elif any([action == Actions.Close_long.value,                               
+            elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
+                self.do_nothing_duration += 1 #считаем длительность 
+                
+        elif self.position == Positions.Long: #если есть long positions        
+            if any([action == Actions.Close_long.value,                               
                     self.done,
                     self.truncated]): #если НС предсказывает закрыть лонг
                 self.position = Positions.No_position #меняем позицию на нет позиций
@@ -185,51 +181,52 @@ class CryptoEnvQuantile_v3(gym.Env):
                 buy_price = self.prices[self.last_buy_tick] #определяем цену входа в лонг по индексу
                 comission = (current_price + buy_price) * self.trade_fee * self.coins #расчет комиссии
                 self.cash += current_price * self.coins * (1 + self.trade_fee) #рачет свободных средств
-                self.coins = 0
-
                 step_reward += (current_price - buy_price) * self.coins - comission #расчет награды, как профит
-
+                self.coins = 0
+            elif action == Actions.Buy.value: #если НС предсказывает покупать
+                self.hold_duration += 1 #считаем длительность 
+            elif action == Actions.Sell.value: #если НС предсказывает продавать
+                self.hold_duration += 1 #считаем длительность  
             elif action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
-                pass
+                self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
-                if self.hold_duration >= self.max_hold_duration: #если удержание дольше максимального
-                    step_penalty += current_price * self.coins * 0.01 #расчет штрафа
-            elif action == Actions.Do_nothing.value: #если НС предсказывает ничего не делать
-                pass
+            elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
+                self.hold_duration += 1 #считаем время удержания
 
         elif any([self.position == Positions.Short,
                   self.done,
                   self.truncated]): #если есть окрытые позиции
-            if action == Actions.Buy.value: #если НС предсказывает покупать
-                pass
-            elif action == Actions.Sell.value: #если НС предсказывает покупать
-                pass    
-            elif action == Actions.Close_long.value: #если НС предсказывает покупать
-                pass
-            elif action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
+            if action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
                 self.position = Positions.No_position #меняем позиуии на нет позиций
                 self.hold_duration = 0 #сбрасываем счетчик удержания
                 sell_price = self.prices[self.last_sell_tick] #определяем цену входа в шорт по индексу
                 comission = (current_price + sell_price) * self.trade_fee * self.coins #расчет комиссии
-                self.cash -= current_price * self.coins * (1 + self.trade_fee) #расчет свободных средств
-                self.coins = 0
-
+                self.cash += current_price * self.coins * (1 + self.trade_fee) #расчет свободных средств
                 step_reward += (sell_price - current_price) * self.coins - comission #расчет награды, как профит
-
+                self.coins = 0
+            elif action == Actions.Buy.value: #если НС предсказывает покупать
+                self.hold_duration += 1 #считаем длительность 
+            elif action == Actions.Sell.value: #если НС предсказывает покупать
+                self.hold_duration += 1 #считаем длительность   
+            elif action == Actions.Close_long.value: #если НС предсказывает покупать
+                self.hold_duration += 1 #считаем длительность     
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
-                if self.hold_duration >= self.max_hold_duration: #если удержание дольше максимального
-                    step_penalty += current_price * self.coins * 0.01 #расчет штрафа
-            elif action == Actions.Do_nothing.value: #если НС предсказывает ничего не делать
-                pass
+            elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
+                self.hold_duration += 1 #считаем время удержания
+
+
+        if self.hold_duration >= self.max_hold_duration: #если удержание дольше максимального
+            step_penalty += current_price * quantity * 0.01 #расчет штрафа
+        if self.do_nothing_duration >= self.max_do_nothing_duration: #если удержание дольше максимального
+            step_penalty += current_price * quantity * 0.01 #расчет штрафа
 
         next_account = self.cash + current_price * self.coins #вычисление состояния текущего портфеля
 
         if self.position == Positions.Short:
-            short_variational = self.account - next_account
-            step_reward += short_variational + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
-            self.account = self.account + short_variational #перезапись состояния портфеля на новый
+            step_reward += self.account - next_account + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
+            self.account = 2 * self.account - next_account #перезапись состояния портфеля на новый
         else:
             step_reward += (next_account - self.account) + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
             self.account = next_account #перезапись состояния портфеля на новый
