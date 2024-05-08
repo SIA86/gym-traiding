@@ -35,3 +35,15 @@ register(
      entry_point="gym_examples.envs:CryptoEnvMinMaxScaler_v3",
      max_episode_steps=1e6,
 )
+
+register(
+     id="CryptoEnvQuantile-v4",
+     entry_point="gym_examples.envs:CryptoEnvQuantile_v4",
+     max_episode_steps=1e6,
+)
+
+register(
+     id="CryptoEnvMinMaxScaler-v4",
+     entry_point="gym_examples.envs:CryptoEnvMinMaxScaler_v4",
+     max_episode_steps=1e6,
+)
