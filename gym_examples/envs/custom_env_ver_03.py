@@ -184,16 +184,16 @@ class CryptoEnvQuantile_v3(gym.Env):
                 step_reward += (current_price - buy_price) * self.coins - comission #расчет награды, как профит
                 self.coins = 0
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.0005
+                #step_penalty += current_price * quantity * 0.0001
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает продавать
-                step_penalty += current_price * quantity * 0.0005
+                #step_penalty += current_price * quantity * 0.0001
                 self.hold_duration += 1 #считаем длительность  
             elif action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
-                step_penalty += current_price * quantity * 0.0005
+                #step_penalty += current_price * quantity * 0.0001
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
-                step_penalty += current_price * quantity * 0.0005
+                #step_penalty += current_price * quantity * 0.0001
                 self.hold_duration += 1 #считаем время удержания
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
@@ -211,25 +211,25 @@ class CryptoEnvQuantile_v3(gym.Env):
                 step_reward += (sell_price - current_price) * self.coins + comission #расчет награды, как профит
                 self.coins = 0
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.0005
+                #step_penalty += current_price * quantity * 0.0001
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.0005
+                #step_penalty += current_price * quantity * 0.0001
                 self.hold_duration += 1 #считаем длительность   
             elif action == Actions.Close_long.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.0005
+                #step_penalty += current_price * quantity * 0.0001
                 self.hold_duration += 1 #считаем длительность     
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
-                step_penalty += current_price * quantity * 0.0005
+                #step_penalty += current_price * quantity * 0.0001
                 self.hold_duration += 1 #считаем время удержания
 
 
         if self.hold_duration >= self.max_hold_duration: #если удержание дольше максимального
-            step_penalty += current_price * quantity * 0.01 #расчет штрафа
+            step_penalty += current_price * quantity * 0.001 #расчет штрафа
         if self.do_nothing_duration >= self.max_do_nothing_duration: #если удержание дольше максимального
-            step_penalty += current_price * quantity * 0.01 #расчет штрафа
+            step_penalty += current_price * quantity * 0.001 #расчет штрафа
 
         next_account = self.cash + current_price * self.coins #вычисление состояния текущего портфеля
 
