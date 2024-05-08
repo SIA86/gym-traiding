@@ -250,8 +250,6 @@ class CryptoEnvQuantile_v3(gym.Env):
         if self.render_mode == 'human':
             self._render_frame()
 
-        print(step_reward)
-
         return observation, step_reward, self.truncated, self.done, info
 
     def _get_info(self, action):
