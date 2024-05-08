@@ -315,7 +315,7 @@ class CryptoEnvQuantile_v3(gym.Env):
 
     def render_all(self, title=None):
         window_ticks = np.arange(len(self.position_history))
-        fig, (pl1, pl2) = plt.subplots(2,1, sharex=True)
+        fig, (pl1, pl2) = plt.subplots(2,1, sharex=True, figsize=(12,8))
         pl1.plot(self.prices)
 
         short_ticks = []
@@ -333,17 +333,21 @@ class CryptoEnvQuantile_v3(gym.Env):
         pl1.plot(short_ticks, self.prices[short_ticks], 'ro')
         pl1.plot(long_ticks, self.prices[long_ticks], 'go')
         pl1.plot(no_position_ticks, self.prices[no_position_ticks], 'bo')
+        pl1.grid(True)
 
-        pl2.plot(self.history['actions'])
-        pl2.subtitle("Actions")
-        
+        actions = [np.NaN for _ in range(self.window_size)] + self.history['actions']
+        pl2.plot(actions)
+        pl2.grid(True)
+        pl2.set_title("Actions: Buy-0, Close_buy-1, Sell-2, Close_sell-3, Hold-4, Do_nothing-5")
+
         if title:
-            pl1.title(title)
+            plt.title(title)
 
-        pl1.suptitle(
+        plt.suptitle(
             "Total Reward: %.6f" % self.total_reward + ' ~ ' +
             "Total Profit: %.6f" % self.total_profit
         )
+        plt.show()
 
     def close(self):
         plt.close()
