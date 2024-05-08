@@ -124,7 +124,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         self.history = {}
 
         observation = self._get_observation()
-        info = self._get_info(None)
+        info = self._get_info(np.NaN)
 
         if self.render_mode == 'human':
             self._render_frame()
@@ -244,7 +244,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         self.position_history.append(self.position.value)
 
         observation = self._get_observation()
-        info = self._get_info(action)
+        info = self._get_info(int(action))
         self._update_history(info)
 
         if self.render_mode == 'human':
