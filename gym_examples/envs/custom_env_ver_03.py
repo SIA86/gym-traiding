@@ -198,10 +198,10 @@ class CryptoEnvQuantile_v3(gym.Env):
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
 
-        elif any([self.position == Positions.Short,
-                  self.done,
-                  self.truncated]): #если есть окрытые позиции
-            if action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
+        elif self.position == Positions.Short: #если есть окрытые позиции
+            if any([action == Actions.Close_short.value,  
+                    self.done,
+                    self.truncated]): #если НС предсказывает закрыть шорт
                 self.position = Positions.No_position #меняем позиуии на нет позиций
                 self.hold_duration = 0 #сбрасываем счетчик удержания
                 sell_price = self.prices[self.last_sell_tick] #определяем цену входа в шорт по индексу
