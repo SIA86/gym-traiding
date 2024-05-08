@@ -184,12 +184,16 @@ class CryptoEnvQuantile_v3(gym.Env):
                 step_reward += (current_price - buy_price) * self.coins - comission #расчет награды, как профит
                 self.coins = 0
             elif action == Actions.Buy.value: #если НС предсказывает покупать
+                step_penalty += current_price * quantity * 0.0005
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает продавать
+                step_penalty += current_price * quantity * 0.0005
                 self.hold_duration += 1 #считаем длительность  
             elif action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
+                step_penalty += current_price * quantity * 0.0005
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
+                step_penalty += current_price * quantity * 0.0005
                 self.hold_duration += 1 #считаем время удержания
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
@@ -207,14 +211,18 @@ class CryptoEnvQuantile_v3(gym.Env):
                 step_reward += (sell_price - current_price) * self.coins + comission #расчет награды, как профит
                 self.coins = 0
             elif action == Actions.Buy.value: #если НС предсказывает покупать
+                step_penalty += current_price * quantity * 0.0005
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает покупать
+                step_penalty += current_price * quantity * 0.0005
                 self.hold_duration += 1 #считаем длительность   
             elif action == Actions.Close_long.value: #если НС предсказывает покупать
+                step_penalty += current_price * quantity * 0.0005
                 self.hold_duration += 1 #считаем длительность     
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
+                step_penalty += current_price * quantity * 0.0005
                 self.hold_duration += 1 #считаем время удержания
 
 
@@ -224,7 +232,6 @@ class CryptoEnvQuantile_v3(gym.Env):
             step_penalty += current_price * quantity * 0.01 #расчет штрафа
 
         next_account = self.cash + current_price * self.coins #вычисление состояния текущего портфеля
-
 
         step_reward += next_account - self.account + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
         self.account = next_account #перезапись состояния портфеля на новый
@@ -308,7 +315,8 @@ class CryptoEnvQuantile_v3(gym.Env):
 
     def render_all(self, title=None):
         window_ticks = np.arange(len(self.position_history))
-        plt.plot(self.prices)
+        fig, (pl1, pl2) = plt.subplots(2,1, sharex=True)
+        pl1.plot(self.prices)
 
         short_ticks = []
         long_ticks = []
@@ -322,14 +330,17 @@ class CryptoEnvQuantile_v3(gym.Env):
             elif self.position_history[i] == Positions.Short.value:
                 short_ticks.append(tick)
 
-        plt.plot(short_ticks, self.prices[short_ticks], 'ro')
-        plt.plot(long_ticks, self.prices[long_ticks], 'go')
-        plt.plot(no_position_ticks, self.prices[no_position_ticks], 'bo')
+        pl1.plot(short_ticks, self.prices[short_ticks], 'ro')
+        pl1.plot(long_ticks, self.prices[long_ticks], 'go')
+        pl1.plot(no_position_ticks, self.prices[no_position_ticks], 'bo')
 
+        pl2.plot(self.history['actions'])
+        pl2.subtitle("Actions")
+        
         if title:
-            plt.title(title)
+            pl1.title(title)
 
-        plt.suptitle(
+        pl1.suptitle(
             "Total Reward: %.6f" % self.total_reward + ' ~ ' +
             "Total Profit: %.6f" % self.total_profit
         )
