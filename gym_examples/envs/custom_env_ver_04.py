@@ -15,7 +15,6 @@ class Actions(Enum):
     Sell = 2
     Close_short = 3
     Hold = 4
-    Do_nothing = 5
 
 
 class Positions(Enum):
@@ -36,8 +35,6 @@ class CryptoEnvQuantile_v4(gym.Env):
                  initial_account: float = 100000.0,
                  max_loss: float = 0.25,
                  single_lot: int = 1000,
-                 max_hold_duration: int = 600,
-                 max_do_nothing_duration: int = 1200,
                  add_positions_info: bool = False,
                  render_mode=None,
                  **kwargs
@@ -64,8 +61,6 @@ class CryptoEnvQuantile_v4(gym.Env):
         self.single_lot = single_lot
         self.initial_account = initial_account
         self.max_loss = max_loss
-        self.max_hold_duration = max_hold_duration
-        self.max_do_nothing_duration = max_do_nothing_duration
 
         self.start_tick = self.window_size
         self.end_tick = len(self.prices) - 1
@@ -86,9 +81,7 @@ class CryptoEnvQuantile_v4(gym.Env):
         self.position = None #флаг сигнализируещеей о наличии открытой позиции
         self.position_history = None #журнал сделок
         self.coins = None #кол-во лотов в портфеле
-        self.hold_duration = None
-        self.do_nothing_duration = None
-    
+
         self.cash = None #свободные средства
         self.account = None #депозит
         self.total_reward = None #итоговая награда
@@ -107,8 +100,6 @@ class CryptoEnvQuantile_v4(gym.Env):
         self.current_tick = self.start_tick #текущая цена равна стартовой цене
         self.last_buy_tick = None #цена последней сделки long
         self.last_sell_tick = None #цена последней сделки short
-        self.hold_duration = 0
-        self.do_nothing_duration = 0
         self.position = Positions.No_position #сброс состояния портфеля на "нет позиций"
         self.position_history = [self.position.value for _ in range(self.window_size + 1)] #запись в историю сделок "нет позиции" длиной ширина окна
 
@@ -163,17 +154,6 @@ class CryptoEnvQuantile_v4(gym.Env):
                 self.coins -= quantity
                 self.last_sell_tick = self.current_tick #сохраняем индекс свечи, когда была продажа
 
-            elif action == Actions.Close_long.value: #если НС предсказывает закрыть лонг
-                step_penalty += current_price * quantity * 0.0001
-                self.do_nothing_duration += 1
-            elif action == Actions.Close_short.value:  #если НС предсказывает закрыть шорт
-                step_penalty += current_price * quantity * 0.0001
-                self.do_nothing_duration += 1
-            elif action == Actions.Hold.value: #если НС предсказывает удерживать
-                step_penalty += current_price * quantity * 0.0001
-                self.do_nothing_duration += 1 #считаем длительность 
-            elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
-                self.do_nothing_duration += 1 #считаем длительность 
                 
         elif self.position == Positions.Long: #если есть long positions        
             if any([action == Actions.Close_long.value,                               
@@ -186,20 +166,7 @@ class CryptoEnvQuantile_v4(gym.Env):
                 self.cash += current_price * self.coins * (1 - self.trade_fee) #рачет свободных средств
                 step_reward += (current_price - buy_price) * self.coins - comission #расчет награды, как профит
                 self.coins = 0
-            elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.0001
-                self.hold_duration += 1 #считаем длительность 
-            elif action == Actions.Sell.value: #если НС предсказывает продавать
-                step_penalty += current_price * quantity * 0.0001
-                self.hold_duration += 1 #считаем длительность  
-            elif action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
-                step_penalty += current_price * quantity * 0.0001
-                self.hold_duration += 1 #считаем длительность 
-            elif action == Actions.Hold.value: #если НС предсказывает удерживать
-                self.hold_duration += 1 #считаем время удержания
-            elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
-                self.hold_duration += 1 #считаем время удержания
-                step_penalty += current_price * quantity * 0.0001
+
 
         elif self.position == Positions.Short: #если есть окрытые позиции
             if any([action == Actions.Close_short.value,  
@@ -213,26 +180,6 @@ class CryptoEnvQuantile_v4(gym.Env):
 
                 step_reward += (sell_price - current_price) * self.coins + comission #расчет награды, как профит
                 self.coins = 0
-            elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.0001
-                self.hold_duration += 1 #считаем длительность 
-            elif action == Actions.Sell.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.0001
-                self.hold_duration += 1 #считаем длительность   
-            elif action == Actions.Close_long.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.0001
-                self.hold_duration += 1 #считаем длительность     
-            elif action == Actions.Hold.value: #если НС предсказывает удерживать
-                self.hold_duration += 1 #считаем время удержания
-            elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
-                step_penalty += current_price * quantity * 0.0001
-                self.hold_duration += 1 #считаем время удержания
-
-
-        if self.hold_duration >= self.max_hold_duration: #если удержание дольше максимального
-            step_penalty += current_price * quantity * 0.001 #расчет штрафа
-        if self.do_nothing_duration >= self.max_do_nothing_duration: #если удержание дольше максимального
-            step_penalty += current_price * quantity * 0.001 #расчет штрафа
 
         next_account = self.cash + current_price * self.coins #вычисление состояния текущего портфеля
 
@@ -371,7 +318,7 @@ class CryptoEnvQuantile_v4(gym.Env):
         return prices.astype(np.float32), signal_features.astype(np.float32)
     
 
-class CryptoEnvMinMaxScaler_v4(CryptoEnvQuantile_v4):
+class CryptoEnvMinMaxScaler_v3(CryptoEnvQuantile_v3):
     def _process_data(self):
         scaler = MinMaxScaler()
         df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
