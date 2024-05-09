@@ -207,10 +207,10 @@ class CryptoEnvQuantile_v3(gym.Env):
                 step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
-                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем время удержания
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
+                step_penalty += current_price * quantity * 0.01
 
         elif self.position == Positions.Short: #если есть окрытые позиции
             if any([action == Actions.Close_short.value,  
@@ -260,7 +260,7 @@ class CryptoEnvQuantile_v3(gym.Env):
             step_reward += next_account - self.account + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
         else:
             step_reward += step_bonus_rew - step_penalty
-            
+
         self.account = next_account #перезапись состояния портфеля на новый
 
         if any([self.done, self.truncated]): #если конец
