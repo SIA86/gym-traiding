@@ -39,6 +39,7 @@ class CryptoEnvQuantile_v3(gym.Env):
                  max_hold_duration: int = 600,
                  max_do_nothing_duration: int = 1200,
                  add_positions_info: bool = False,
+                 variation_margin: bool = False,
                  render_mode=None,
                  **kwargs
                  ):
@@ -48,6 +49,7 @@ class CryptoEnvQuantile_v3(gym.Env):
 
         self.render_mode = render_mode
         self.add_positions_info = add_positions_info
+        self.variation_margin = variation_margin
 
         #параметры данных
         self.df = dataframe
@@ -165,10 +167,13 @@ class CryptoEnvQuantile_v3(gym.Env):
 
             elif action == Actions.Close_long.value: #если НС предсказывает закрыть лонг
                 self.do_nothing_duration += 1
+                step_penalty += current_price * quantity * 0.01
             elif action == Actions.Close_short.value:  #если НС предсказывает закрыть шорт
                 self.do_nothing_duration += 1
+                step_penalty += current_price * quantity * 0.01
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
-                self.do_nothing_duration += 1 #считаем длительность 
+                self.do_nothing_duration += 1 #считаем длительность
+                step_penalty += current_price * quantity * 0.01 
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
                 self.do_nothing_duration += 1 #считаем длительность 
                 
@@ -181,19 +186,28 @@ class CryptoEnvQuantile_v3(gym.Env):
                 buy_price = self.prices[self.last_buy_tick] #определяем цену входа в лонг по индексу
                 comission = (current_price + buy_price) * self.trade_fee * self.coins #расчет комиссии
                 self.cash += current_price * self.coins * (1 - self.trade_fee) #рачет свободных средств
-                step_reward += (current_price - buy_price) * self.coins - comission #расчет награды, как профит
+
+                profit_percents = abs(current_price / buy_price - 1)
+
+                if profit_percents > 0.02:
+                    step_reward += 2 * (current_price - buy_price) * self.coins - comission 
+                elif profit_percents <= 0.02 and profit_percents >= 0.01: 
+                    step_reward += (current_price - buy_price) * self.coins - comission 
+                else:
+                    step_reward += 0.5 * (current_price - buy_price) * self.coins - comission 
+
                 self.coins = 0
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                #step_penalty += current_price * quantity * 0.0001
+                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает продавать
-                #step_penalty += current_price * quantity * 0.0001
+                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем длительность  
             elif action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
-                #step_penalty += current_price * quantity * 0.0001
+                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
-                #step_penalty += current_price * quantity * 0.0001
+                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем время удержания
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
@@ -208,21 +222,30 @@ class CryptoEnvQuantile_v3(gym.Env):
                 comission = (current_price + sell_price) * self.trade_fee * self.coins #расчет комиссии
                 self.cash += current_price * self.coins * (1 + self.trade_fee) #расчет свободных средств
 
-                step_reward += (sell_price - current_price) * self.coins + comission #расчет награды, как профит
+                profit_percents = abs(sell_price / current_price - 1)
+
+                if profit_percents > 0.02:
+                    step_reward += 2 * (sell_price - current_price) * self.coins - comission 
+                elif profit_percents <= 0.02 and profit_percents >= 0.01: 
+                    step_reward += (sell_price - current_price) * self.coins - comission 
+                else:
+                    step_reward += 0.5 * (sell_price - current_price) * self.coins - comission 
+
                 self.coins = 0
+
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                #step_penalty += current_price * quantity * 0.0001
+                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает покупать
-                #step_penalty += current_price * quantity * 0.0001
+                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем длительность   
             elif action == Actions.Close_long.value: #если НС предсказывает покупать
-                #step_penalty += current_price * quantity * 0.0001
+                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем длительность     
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
             elif action == Actions.Do_nothing.value: #если НС предсказывает удерживать
-                #step_penalty += current_price * quantity * 0.0001
+                step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем время удержания
 
 
@@ -233,7 +256,11 @@ class CryptoEnvQuantile_v3(gym.Env):
 
         next_account = self.cash + current_price * self.coins #вычисление состояния текущего портфеля
 
-        step_reward += next_account - self.account + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
+        if self.variation_margin:
+            step_reward += next_account - self.account + step_bonus_rew - step_penalty #расчет вознаграждения, как величина изменения портфеля
+        else:
+            step_reward += step_bonus_rew - step_penalty
+            
         self.account = next_account #перезапись состояния портфеля на новый
 
         if any([self.done, self.truncated]): #если конец
