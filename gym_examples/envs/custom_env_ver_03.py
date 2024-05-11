@@ -90,9 +90,14 @@ class CryptoEnvQuantile_v3(gym.Env):
     
         self.cash = None #свободные средства
         self.account = None #депозит
-        self.total_reward = None #итоговая награда
-        self.total_profit = None #прибыль/убыток
-
+        self.total_reward = None
+        self.total_profit = None
+        self.abs_total_profit = None
+        self.short_num = None
+        self.short_profit = None
+        self.long_num = None
+        self.long_profit = None
+        self.durations = None
         self.first_rendering = None #параметры отрисовки
         self.history = None #журнал общий
 
@@ -117,7 +122,13 @@ class CryptoEnvQuantile_v3(gym.Env):
 
         self.total_reward = 0
         self.total_profit = 0
-        
+        self.abs_total_profit = 0
+        self.short_num = 0
+        self.short_profit = 0
+        self.long_num = 0
+        self.long_profit = 0
+        self.durations = []
+
         self._first_rendering = True
         self.history = {}
 
@@ -132,7 +143,6 @@ class CryptoEnvQuantile_v3(gym.Env):
     def step(self, action):
         self.current_tick += 1
         step_reward = 0
-        step_bonus_rew = 0
         step_penalty = 0
         current_price = self.prices[self.current_tick]
         quantity = int(self.single_lot / current_price * 100) / 100
@@ -175,21 +185,26 @@ class CryptoEnvQuantile_v3(gym.Env):
                     self.done,
                     self.truncated]): #если НС предсказывает закрыть лонг
                 self.position = Positions.No_position #меняем позицию на нет позиций
-                self.hold_duration = 0 #сбрасываем счетчик удержания
+
                 buy_price = self.prices[self.last_buy_tick] #определяем цену входа в лонг по индексу
                 comission = (current_price + buy_price) * self.trade_fee * self.coins #расчет комиссии
                 self.cash += current_price * self.coins * (1 - self.trade_fee) #рачет свободных средств
 
                 profit_percents = abs(current_price / buy_price - 1)
+                reward = (current_price - buy_price) * self.coins - comission
 
                 if profit_percents > 0.02:
-                    step_reward += 2 * (current_price - buy_price) * self.coins - comission 
+                    step_reward += 2 * reward 
                 elif profit_percents <= 0.02 and profit_percents >= 0.01: 
-                    step_reward += (current_price - buy_price) * self.coins - comission 
+                    step_reward += reward
                 else:
-                    step_reward += 0.5 * (current_price - buy_price) * self.coins - comission 
+                    step_reward += 0.5 * reward
 
+                self.long_num += 1
+                self.long_profit += reward
+                self.durations.append(self.hold_duration)  
                 self.coins = 0
+                self.hold_duration = 0 #сбрасываем счетчик удержания
 
             elif action == Actions.Buy.value: #если НС предсказывает покупать
                 step_penalty += current_price * quantity * 0.01
@@ -208,21 +223,27 @@ class CryptoEnvQuantile_v3(gym.Env):
                     self.done,
                     self.truncated]): #если НС предсказывает закрыть шорт
                 self.position = Positions.No_position #меняем позиуии на нет позиций
-                self.hold_duration = 0 #сбрасываем счетчик удержания
+
                 sell_price = self.prices[self.last_sell_tick] #определяем цену входа в шорт по индексу
                 comission = -1 * (current_price + sell_price) * self.trade_fee * self.coins #расчет комиссии
                 self.cash += current_price * self.coins * (1 + self.trade_fee) #расчет свободных средств
 
                 profit_percents = abs(sell_price / current_price - 1)
+                reward = -1 * (sell_price - current_price) * self.coins - comission
 
                 if profit_percents > 0.02:
-                    step_reward += -2 * (sell_price - current_price) * self.coins - comission 
+                    step_reward += 2* reward
                 elif profit_percents <= 0.02 and profit_percents >= 0.01: 
-                    step_reward += -1 * (sell_price - current_price) * self.coins - comission 
+                    step_reward += reward
                 else:
-                    step_reward += -0.5 * (sell_price - current_price) * self.coins - comission 
+                    step_reward += 0.5 * reward
+
+                self.short_num += 1
+                self.short_profit += reward
+                self.durations.append(self.hold_duration)    
 
                 self.coins = 0
+                self.hold_duration = 0 #сбрасываем счетчик удержания
 
             elif action == Actions.Buy.value: #если НС предсказывает покупать
                 step_penalty += current_price * quantity * 0.01
@@ -248,18 +269,19 @@ class CryptoEnvQuantile_v3(gym.Env):
             step_reward -=  step_penalty
 
         self.account = next_account #перезапись состояния портфеля на новый
-
-        if any([self.done, self.truncated]): #если конец
-            self.total_profit = self.account / self.initial_account #итоговый доход
-
+            
         #запись истории
         self.total_reward += step_reward
+        self.total_profit = self.account / self.initial_account #итоговый доход
+        self.abs_total_profit = self.account - self.initial_account
         self.position_history.append(self.position.value)
 
         observation = self._get_observation()
         info = self._get_info(int(action))
         self._update_history(info)
 
+        if self.done or self.truncated:
+            print(info)
         if self.render_mode == 'human':
             self._render_frame()
 
@@ -269,8 +291,14 @@ class CryptoEnvQuantile_v3(gym.Env):
         return dict(
             total_reward=self.total_reward,
             total_profit=self.total_profit,
+            abs_total_profit = self.abs_total_profit,
+            long_num = self.long_num,
+            short_num = self.short_num,
+            long_profit = self.long_profit,
+            short_profit = self.short_profit,
+            mean_duration = np.mean(self.durations),
             position=self.position.value,
-            actions=action
+            action=action,
         )
 
     def _get_observation(self):
