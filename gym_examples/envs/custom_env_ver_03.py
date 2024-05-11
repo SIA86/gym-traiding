@@ -376,10 +376,10 @@ class CryptoEnvQuantile_v3(gym.Env):
         pl1.plot(no_position_ticks, self.prices[no_position_ticks], 'bo')
         pl1.grid(True)
 
-        actions = [np.NaN for _ in range(self.window_size)] + self.history['actions']
+        actions = [np.NaN for _ in range(self.window_size)] + self.history['action']
         pl2.plot(actions)
         pl2.grid(True)
-        pl2.set_title("Actions: Buy-0, Close_buy-1, Sell-2, Close_sell-3, Hold-4, Do_nothing-5")
+        pl2.set_title("Actions: Buy-0, Close_buy-1, Sell-2, Close_sell-3, Hold-4")
 
         if title:
             plt.title(title)
