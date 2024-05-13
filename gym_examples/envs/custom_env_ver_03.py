@@ -8,6 +8,9 @@ from typing import Tuple
 from sklearn.preprocessing import QuantileTransformer, MinMaxScaler
 import gymnasium as gym
 
+from time import thread_time
+import plotly.graph_objects as go
+
 
 class Actions(Enum):
     Buy = 0
@@ -51,11 +54,12 @@ class CryptoEnvQuantile_v3(gym.Env):
         self.variation_margin = variation_margin
 
         #параметры данных
-        self.df = dataframe
-        self.window_size = window_size
+        self.episode  = 0 
         self.frame_bound = frame_bound
+        self.window_size = window_size
         self.features_names = features_names
         self.price_type = price_type
+        self.df = dataframe[self.frame_bound[0]-self.window_size:self.frame_bound[1]].reset_index(drop=True)
 
         self.prices, self.signal_features = self._process_data()
         self.shape = (window_size, self.signal_features.shape[1] + int(self.add_positions_info))
@@ -100,6 +104,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         self.durations = None
         self.first_rendering = None #параметры отрисовки
         self.history = None #журнал общий
+        self.trades = None #журнал сделок
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
@@ -128,6 +133,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         self.long_num = 0
         self.long_profit = 0
         self.durations = []
+        self.trades = pd.DataFrame(columns=['start_time', 'type_dir'])
 
         self._first_rendering = True
         self.history = {}
@@ -163,6 +169,12 @@ class CryptoEnvQuantile_v3(gym.Env):
                 self.cash -= current_price * quantity * (1 + self.trade_fee) #расчитываем свободные средства
                 self.coins += quantity
                 self.last_buy_tick = self.current_tick #сохраняем индекс свечи, когда была покупка
+
+                self.trade = pd.DataFrame({
+                    'start_time':[self.df.loc[self.current_tick, 'datetime_close']],
+                    'type_dir':[self.position.value]
+                })
+                self.trades = pd.concat([self.trades, self.trade], axis=0) 
             
             elif action == Actions.Sell.value: #если НС предсказывает покупать
                 self.position = Positions.Short #меняем позицию на шорт
@@ -170,6 +182,12 @@ class CryptoEnvQuantile_v3(gym.Env):
                 self.cash += current_price * quantity * (1 - self.trade_fee) #расчитываем свободные средства
                 self.coins -= quantity
                 self.last_sell_tick = self.current_tick #сохраняем индекс свечи, когда была продажа
+
+                self.trade = pd.DataFrame({
+                    'start_time':[self.df.loc[self.current_tick, 'datetime_close']],
+                    'type_dir':[self.position.value]
+                })
+                self.trades = pd.concat([self.trades, self.trade], axis=0) 
 
             elif action == Actions.Close_long.value:
                 self.hold_duration += 1
@@ -205,6 +223,13 @@ class CryptoEnvQuantile_v3(gym.Env):
                 self.durations.append(self.hold_duration)  
                 self.coins = 0
                 self.hold_duration = 0 #сбрасываем счетчик удержания
+
+                self.trade = pd.DataFrame({
+                    'start_time':[self.df.loc[self.current_tick, 'datetime_close']],
+                    'type_dir':[self.position.value]
+                })
+                self.trades = pd.concat([self.trades, self.trade], axis=0) 
+
 
             elif action == Actions.Buy.value: #если НС предсказывает покупать
                 step_penalty += current_price * quantity * 0.01
@@ -245,6 +270,12 @@ class CryptoEnvQuantile_v3(gym.Env):
                 self.coins = 0
                 self.hold_duration = 0 #сбрасываем счетчик удержания
 
+                self.trade = pd.DataFrame({
+                    'start_time':[self.df.loc[self.current_tick, 'datetime_close']],
+                    'type_dir':[self.position.value]
+                })
+                self.trades = pd.concat([self.trades, self.trade], axis=0) 
+
             elif action == Actions.Buy.value: #если НС предсказывает покупать
                 step_penalty += current_price * quantity * 0.01
                 self.hold_duration += 1 #считаем длительность 
@@ -281,7 +312,21 @@ class CryptoEnvQuantile_v3(gym.Env):
         self._update_history(info)
 
         if self.done or self.truncated:
-            print(info)
+            self.trades = self.trades.reset_index(drop=True)
+            
+            
+            print("\n".join([
+                f"Episode_{self.episode}:",
+                f"Total profit: {info['abs_total_profit']:.2f} ({info['total_profit'] - 1:.4f}%)",
+                f"Longs num: {info['long_num']}, profit: {info['long_profit']:.2f}",
+                f"Short num: {info['short_num']}, profit: {info['short_profit']:.2f}",
+                f"Mean duration: {np.mean(info['duration']):.2f}"
+                ])
+            )
+            
+            self.render_all()
+            self.episode += 1
+
         if self.render_mode == 'human':
             self._render_frame()
 
@@ -296,7 +341,7 @@ class CryptoEnvQuantile_v3(gym.Env):
             short_num = self.short_num,
             long_profit = self.long_profit,
             short_profit = self.short_profit,
-            mean_duration = np.mean(self.durations),
+            duration = self.durations,
             position=self.position.value,
             action=action,
         )
@@ -390,6 +435,30 @@ class CryptoEnvQuantile_v3(gym.Env):
         )
         plt.show()
 
+    def plotly_all(self):
+        fig = go.Figure(data=[go.Candlestick(
+                x=self.df['datetime_close'],
+                open=self.df['Price_open'],
+                high=self.df['Price_high'],
+                low=self.df['Price_low'],
+                close=self.df['Price_close'],
+                text=self.df.index )])
+
+        for index, row in self.trades.loc[self.trades['type_dir'] ==  1].iterrows():
+            fig.add_vline(x=self.trades['start_time'].loc[index], line_width=3, line_dash="dash", line_color="green")
+
+        for index, row in self.trades.loc[(self.trades['type_dir'] ==  2)].iterrows():
+            fig.add_vline(x=self.trades['start_time'].loc[index], line_width=3, line_dash="dash", line_color="red")
+
+        for index, row in self.trades.loc[(self.trades['type_dir'] ==  0)].iterrows():
+            fig.add_vline(x=self.trades['start_time'].loc[index], line_width=3, line_dash="dash", line_color="gray")
+
+        fig.update_layout(
+            autosize=True,
+        )
+
+        fig.show()
+
     def close(self):
         plt.close()
 
@@ -400,10 +469,9 @@ class CryptoEnvQuantile_v3(gym.Env):
         plt.show()
 
     def _process_data(self):
-        quantile_transformer = QuantileTransformer(output_distribution='normal', random_state=0)
-        df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
-        prices = df.loc[:,self.price_type].to_numpy()
-        signal_features = df.loc[:,self.features_names].to_numpy()
+        quantile_transformer = QuantileTransformer(output_distribution='normal', random_state=0)     
+        prices = self.df.loc[:,self.price_type].to_numpy()
+        signal_features = self.df.loc[:,self.features_names].to_numpy()
         signal_features = quantile_transformer.fit_transform(signal_features)
 
         return prices.astype(np.float32), signal_features.astype(np.float32)
@@ -412,9 +480,8 @@ class CryptoEnvQuantile_v3(gym.Env):
 class CryptoEnvMinMaxScaler_v3(CryptoEnvQuantile_v3):
     def _process_data(self):
         scaler = MinMaxScaler()
-        df = self.df[self.frame_bound[0]-self.window_size:self.frame_bound[1]]
-        prices = df.loc[:,self.price_type].to_numpy()
-        signal_features = df.loc[:,self.features_names].to_numpy()
+        prices = self.df.loc[:,self.price_type].to_numpy()
+        signal_features = self.df.loc[:,self.features_names].to_numpy()
         signal_features = scaler.fit_transform(signal_features)
 
         return prices.astype(np.float32), signal_features.astype(np.float32)
