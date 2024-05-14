@@ -191,10 +191,10 @@ class CryptoEnvQuantile_v3(gym.Env):
 
             elif action == Actions.Close_long.value:
                 self.hold_duration += 1
-                step_penalty += current_price * quantity * 0.01
+                step_penalty += current_price * quantity * 0.001
             elif action == Actions.Close_short.value:
                 self.hold_duration += 1
-                step_penalty += current_price * quantity * 0.01
+                step_penalty += current_price * quantity * 0.001
             elif action == Actions.Hold.value:
                 self.hold_duration += 1 
           
@@ -232,13 +232,13 @@ class CryptoEnvQuantile_v3(gym.Env):
 
 
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.01
+                step_penalty += current_price * quantity * 0.001
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает продавать
-                step_penalty += current_price * quantity * 0.01
+                step_penalty += current_price * quantity * 0.001
                 self.hold_duration += 1 #считаем длительность  
             elif action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
-                step_penalty += current_price * quantity * 0.01
+                step_penalty += current_price * quantity * 0.001
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
@@ -277,13 +277,13 @@ class CryptoEnvQuantile_v3(gym.Env):
                 self.trades = pd.concat([self.trades, self.trade], axis=0) 
 
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.01
+                step_penalty += current_price * quantity * 0.001
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.01
+                step_penalty += current_price * quantity * 0.001
                 self.hold_duration += 1 #считаем длительность   
             elif action == Actions.Close_long.value: #если НС предсказывает покупать
-                step_penalty += current_price * quantity * 0.01
+                step_penalty += current_price * quantity * 0.001
                 self.hold_duration += 1 #считаем длительность     
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
