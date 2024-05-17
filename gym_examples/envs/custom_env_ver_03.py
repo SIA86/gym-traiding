@@ -125,6 +125,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         self.cash = self.initial_account  #стартовый кэш
         self.account = self.cash + current_price * self.coins #депозит как сумма кэша и акций, выраженных в цене
 
+        self.episode  = 0 
         self.total_reward = 0
         self.total_profit = 0
         self.abs_total_profit = 0
