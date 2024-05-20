@@ -54,7 +54,6 @@ class CryptoEnvQuantile_v3(gym.Env):
         self.variation_margin = variation_margin
 
         #параметры данных
-        self.episode  = 0 
         self.frame_bound = frame_bound
         self.window_size = window_size
         self.features_names = features_names
@@ -316,7 +315,6 @@ class CryptoEnvQuantile_v3(gym.Env):
             
             
             print("\n".join([
-                f"Episode_{self.episode}:",
                 f"Total profit: {info['abs_total_profit']:.2f} ({info['total_profit'] - 1:.4f}%)",
                 f"Longs num: {info['long_num']}, profit: {info['long_profit']:.2f}",
                 f"Short num: {info['short_num']}, profit: {info['short_profit']:.2f}",
@@ -325,7 +323,6 @@ class CryptoEnvQuantile_v3(gym.Env):
             )
             
             self.render_all()
-            self.episode += 1
 
         if self.render_mode == 'human':
             self._render_frame()
