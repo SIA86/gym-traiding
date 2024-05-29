@@ -416,6 +416,7 @@ class CryptoEnvQuantile_v3(gym.Env):
         pl1.plot(short_ticks, self.prices[short_ticks], 'ro')
         pl1.plot(long_ticks, self.prices[long_ticks], 'go')
         pl1.plot(no_position_ticks, self.prices[no_position_ticks], 'bo')
+        pl1.set_title("Green - long position, Red - short position, Blue - no position")
         pl1.grid(True)
 
         actions = [np.NaN for _ in range(self.window_size)] + self.history['action']
