@@ -12,11 +12,11 @@ import plotly.graph_objects as go
 
 
 class Actions(Enum):
-    Buy = 1
-    Close_long = 2
-    Sell = 3
-    Close_short = 4
-    Hold = 0
+    Buy = 0
+    Close_long = 1
+    Sell = 2
+    Close_short = 3
+    Hold = 4
 
 
 class Positions(Enum):
