@@ -278,7 +278,7 @@ class CryptoEnvMinMaxScaler_v2(gym.Env):
             self.trades = self.trades.reset_index(drop=True)
             
             print("\n".join([
-                f"Total profit: {self.total_profit:.4f}",
+                f"Total profit: {info['total_profit']:.4f}",
                 f"Longs num: {info['long_num']}, profit: {info['long_profit']:.2f}",
                 f"Short num: {info['short_num']}, profit: {info['short_profit']:.2f}",
                 f"Mean duration: {np.mean(info['duration']):.2f}"
@@ -295,6 +295,7 @@ class CryptoEnvMinMaxScaler_v2(gym.Env):
     def _get_info(self, action):
         return dict(
             total_reward=self.total_reward,
+            total_profit=self.total_profit,
             long_num = self.long_num,
             short_num = self.short_num,
             long_profit = self.long_profit,
