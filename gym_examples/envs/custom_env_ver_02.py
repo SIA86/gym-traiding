@@ -34,7 +34,7 @@ class CryptoEnvMinMaxScaler_v2(gym.Env):
                  features_names: list[str] = '',
                  price_type: str = 'Price_close',
                  trade_fee: float = 0.001,
-                 max_hold_duration: int = 600,
+                 max_hold_duration: int = 60,
                  add_positions_info: bool = False,
                  render_mode=None,
                  **kwargs
@@ -160,10 +160,10 @@ class CryptoEnvMinMaxScaler_v2(gym.Env):
 
             elif action == Actions.Close_long.value:
                 self.hold_duration += 1
-                step_penalty += current_price * 0.01
+                step_penalty += current_price * 0.1
             elif action == Actions.Close_short.value:
                 self.hold_duration += 1
-                step_penalty += current_price * 0.01
+                step_penalty += current_price * 0.1
             elif action == Actions.Hold.value:
                 self.hold_duration += 1 
           
@@ -203,13 +203,13 @@ class CryptoEnvMinMaxScaler_v2(gym.Env):
 
 
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty += current_price * 0.01
+                step_penalty += current_price * 0.1
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает продавать
-                step_penalty += current_price * 0.01
+                step_penalty += current_price * 0.1
                 self.hold_duration += 1 #считаем длительность  
             elif action == Actions.Close_short.value: #если НС предсказывает закрыть шорт
-                step_penalty += current_price * 0.01
+                step_penalty += current_price * 0.1
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
@@ -250,19 +250,19 @@ class CryptoEnvMinMaxScaler_v2(gym.Env):
                 self.trades = pd.concat([self.trades, self.trade], axis=0) 
 
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty += current_price * 0.01
+                step_penalty += current_price * 0.1
                 self.hold_duration += 1 #считаем длительность 
             elif action == Actions.Sell.value: #если НС предсказывает покупать
-                step_penalty += current_price * 0.01
+                step_penalty += current_price * 0.1
                 self.hold_duration += 1 #считаем длительность   
             elif action == Actions.Close_long.value: #если НС предсказывает покупать
-                step_penalty += current_price * 0.01
+                step_penalty += current_price * 0.1
                 self.hold_duration += 1 #считаем длительность     
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
 
         if self.hold_duration >= self.max_hold_duration: #если удержание дольше максимального
-            step_penalty += current_price * 0.01 #расчет штрафа
+            step_penalty += current_price * 0.1 #расчет штрафа
 
         step_reward -=  step_penalty
             
