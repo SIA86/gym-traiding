@@ -110,7 +110,8 @@ class EnvTrain(gym.Env):
         step_reward = 0
         self.current_tick += 1
 
-        current_price = self.norm_prices[self.current_tick]
+        current_price = self.prices[self.current_tick]
+        current_norm_price = self.norm_prices[self.current_tick]
 
         if self.current_tick == self.end_tick:
             self.done = True
@@ -131,7 +132,7 @@ class EnvTrain(gym.Env):
             
             elif action == Actions.Close.value: #если НС предсказывает покупать
                 self.hold_duration += 1  #сбрасываем счетчик длительности
-                step_penalty = current_price * self.penalty_mult
+                step_penalty = current_norm_price * self.penalty_mult
 
             elif action == Actions.Hold.value:
                 self.hold_duration += 1 
@@ -141,10 +142,11 @@ class EnvTrain(gym.Env):
                     self.done]): #если НС предсказывает закрыть лонг
                 self.position = Positions.No_position #меняем позицию на нет позиций
 
-                buy_price = self.norm_prices[self.last_buy_tick] #определяем цену входа в лонг по индексу
-                comission = (current_price + buy_price) * self.trade_fee #расчет комиссии
+                buy_price = self.prices[self.last_buy_tick]
+                buy_norm_price = self.norm_prices[self.last_buy_tick] #определяем цену входа в лонг по индексу
+                comission = (current_norm_price + buy_norm_price) * self.trade_fee #расчет комиссии
 
-                step_reward = (current_price - buy_price) - comission
+                step_reward = (current_norm_price - buy_norm_price) - comission
 
                 temp_profit = self.total_profit  / (buy_price * (1 + self.trade_fee))
                 self.total_profit = temp_profit * (current_price * (1 - self.trade_fee))
@@ -162,7 +164,7 @@ class EnvTrain(gym.Env):
 
 
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty = current_price * self.penalty_mult
+                step_penalty = current_norm_price * self.penalty_mult
                 self.hold_duration += 1 #считаем длительность 
     
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
