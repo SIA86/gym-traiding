@@ -31,8 +31,8 @@ class CryptoEnvQuantile_v3(gym.Env):
     metadata = {'render_modes': ['human'], 'render_fps': 3}
     def __init__(self, 
                  dataframe: pd.DataFrame, 
-                 window_size: int,
-                 frame_bound: Tuple[int, int],
+                 window_size: int = 60,
+                 frame_bound: Tuple[int, int] = (0,1000),
                  features_names: list[str] = '',
                  price_type: str = 'Price_close',
                  trade_fee: float = 0.001,
