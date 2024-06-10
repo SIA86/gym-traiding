@@ -223,25 +223,23 @@ class EnvTrain(gym.Env):
         window_ticks = np.arange(len(self.position_history))
 
         #вывод графиков
-        fig1, ax1 = plt.subplots(2,1, figsize=(12,5), sharex=True)
+        fig, axis = plt.subplots(6,1, figsize=(12,14), gridspec_kw={'height_ratios': [2,2,2,2,3.5,1.5]}, tight_layout=True)
 
-        ax1[0].plot(self.all_total_rewards)
-        ax1[0].set_title(f"Total reward (TR): {info['total_reward']:.3f}")
-        ax1[0].grid(True)
+        axis[0].plot(self.all_total_rewards)
+        axis[0].set_title(f"Total reward (TR): {info['total_reward']:.3f}")
+        axis[0].grid(True)
 
-        ax1[1].plot(self.all_total_profits, color='red')
-        ax1[1].set_title(f"Total profit (TP): {info['total_profit']:.3f}")
-        ax1[1].grid(True)
+        axis[1].plot(self.all_total_profits, color='red')
+        axis[1].set_title(f"Total profit (TP): {info['total_profit']:.3f}")
+        axis[1].grid(True)
 
-        fig2, ax2 = plt.subplots(4,1, figsize=(12,9), sharex=True, gridspec_kw={'height_ratios': [2,2,3.5,1.5]})
+        axis[2].plot(info['cum_reward'])
+        axis[2].set_title("Cummulative reward (CR)")
+        axis[2].grid(True)
 
-        ax2[0].plot(info['cum_reward'])
-        ax2[0].set_title("Cummulative reward (CR)")
-        ax2[0].grid(True)
-
-        ax2[1].plot(info['cum_profit'], color='red')
-        ax2[1].set_title("Cummulative profit (CP)")
-        ax2[1].grid(True)
+        axis[3].plot(info['cum_profit'], color='red')
+        axis[3].set_title("Cummulative profit (CP)")
+        axis[3].grid(True)
 
         long_ticks = []
         no_position_ticks = []
@@ -252,20 +250,20 @@ class EnvTrain(gym.Env):
             elif self.position_history[i] == Positions.Long.value:
                 long_ticks.append(tick)
 
-        ax2[2].plot(local_prices)
-        ax2[2].plot(long_ticks, local_prices[long_ticks], 'go')
-        ax2[2].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
-        ax2[2].set_title(f"Episode length: {self.episode_length}, num deals: {info['deals']}, mean duration: {np.mean(info['duration']):.2f}")
-        ax2[2].grid(True)
+        axis[4].plot(local_prices)
+        axis[4].plot(long_ticks, local_prices[long_ticks], 'go')
+        axis[4].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
+        axis[4].set_title(f"Episode length: {self.episode_length}, num deals: {info['deals']}, mean duration: {np.mean(info['duration']):.2f}")
+        axis[4].grid(True)
 
         actions = self.history['action']
-        ax2[3].plot(actions)
-        ax2[3].grid(True)
-        ax2[3].set_yticks(np.arange(3), ['Buy', 'Hold', 'Close']) 
+        axis[5].plot(actions)
+        axis[5].grid(True)
+        axis[5].set_yticks(np.arange(3), ['Buy', 'Hold', 'Close']) 
         buys, holds, closes = map(actions.count, [0,1,2])
-        ax2[3].set_title(f"Buy: {buys}, Hold: {holds}, Close: {closes}")
+        axis[5].set_title(f"Buy: {buys}, Hold: {holds}, Close: {closes}")
 
-        display(fig1, fig2, clear=True,) 
+        display(fig, clear=True) 
  
         clear_output(wait=True)
 
