@@ -102,6 +102,7 @@ class EnvTrain(gym.Env):
         self.deals = 0
         self.trades = pd.DataFrame(columns=['start_time', 'type_dir'], dtype=(int, int))
         self.history = {}
+        #plt.close('all')
 
         observation = self._get_observation()
         info = self._get_info(np.NaN)
@@ -218,29 +219,29 @@ class EnvTrain(gym.Env):
             self.history[key].append(value)
 
     def plot_results(self, info):
-        #вывод графиков
-        fig, self.axes = plt.subplots(6,1, figsize=(12,16), sharex=True, gridspec_kw={'height_ratios': [3,3,2,2,4,2]})
-        fig.suptitle(f"Metrics at episode-{self.episode}")
         local_prices = self.prices[self.start_tick:self.end_tick]
         window_ticks = np.arange(len(self.position_history))
 
-        self.axes[0].plot(self.all_total_rewards)
-        self.axes[0].set_title(f"Total reward: {info['total_reward']:.2f}")
-        self.axes[0].grid(True)
+        #вывод графиков
+        fig1, ax1 = plt.subplots(2,1, figsize=(12,5), sharex=True)
 
-        self.axes[1].plot(self.all_total_profits)
-        self.axes[1].set_title(f"Total profit: {info['total_profit']:.4f}")
-        self.axes[1].grid(True)
+        ax1[0].plot(self.all_total_rewards)
+        ax1[0].set_title(f"Total reward (TR): {info['total_reward']:.3f}")
+        ax1[0].grid(True)
 
-        self.axes[2].plot(info['cum_reward'])
-        self.axes[2].set_title("Cummulative reward (CR)")
-        self.axes[2].grid(True)
+        ax1[1].plot(self.all_total_profits, color='red')
+        ax1[1].set_title(f"Total profit (TP): {info['total_profit']:.3f}")
+        ax1[1].grid(True)
 
-        self.axes[3].plot(info['cum_profit'])
-        self.axes[3].set_title("Cummulative profit (CP)")
-        self.axes[3].grid(True)
+        fig2, ax2 = plt.subplots(4,1, figsize=(12,9), sharex=True, gridspec_kw={'height_ratios': [2,2,3.5,1.5]})
 
-        self.axes[4].plot(local_prices)
+        ax2[0].plot(info['cum_reward'])
+        ax2[0].set_title("Cummulative reward (CR)")
+        ax2[0].grid(True)
+
+        ax2[1].plot(info['cum_profit'], color='red')
+        ax2[1].set_title("Cummulative profit (CP)")
+        ax2[1].grid(True)
 
         long_ticks = []
         no_position_ticks = []
@@ -250,20 +251,22 @@ class EnvTrain(gym.Env):
                 no_position_ticks.append(tick)
             elif self.position_history[i] == Positions.Long.value:
                 long_ticks.append(tick)
-  
-        self.axes[4].plot(long_ticks, local_prices[long_ticks], 'go')
-        self.axes[4].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
-        self.axes[4].set_title(f"Episode length: {self.episode_length}, num deals: {info['deals']}, mean duration: {np.mean(info['duration']):.2f}")
-        self.axes[4].grid(True)
+
+        ax2[2].plot(local_prices)
+        ax2[2].plot(long_ticks, local_prices[long_ticks], 'go')
+        ax2[2].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
+        ax2[2].set_title(f"Episode length: {self.episode_length}, num deals: {info['deals']}, mean duration: {np.mean(info['duration']):.2f}")
+        ax2[2].grid(True)
 
         actions = self.history['action']
-        self.axes[5].plot(actions)
-        self.axes[5].grid(True)
-        self.axes[5].set_yticks(np.arange(3), ['Buy', 'Hold', 'Close']) 
+        ax2[3].plot(actions)
+        ax2[3].grid(True)
+        ax2[3].set_yticks(np.arange(3), ['Buy', 'Hold', 'Close']) 
         buys, holds, closes = map(actions.count, [0,1,2])
-        self.axes[5].set_title(f"Buys-{buys}, Holds-{holds}, Closes-{closes}")
+        ax2[3].set_title(f"Buy: {buys}, Hold: {holds}, Close: {closes}")
 
-        display(fig)    
+        display(fig1, fig2, clear=True,) 
+ 
         clear_output(wait=True)
 
     def _process_data(self):
