@@ -12,6 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import gymnasium as gym
 import random
+from IPython.display import display, clear_output
 from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
 
 
@@ -76,6 +77,9 @@ class EnvTrain(gym.Env):
         self.history = None #журнал общий
         self.trades = None #журнал сделок
         self.hold_duration = None
+        self.episode = 0
+
+
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
@@ -88,6 +92,7 @@ class EnvTrain(gym.Env):
         self.last_sell_tick = None #цена последней сделки short
         self.position = Positions.No_position #сброс состояния портфеля на "нет позиций"
         self.position_history = [] #запись в историю сделок "нет позиции" длиной ширина окна
+        self.episode += 1
 
         self.total_reward = 0
         self.total_profit = 1
@@ -185,16 +190,9 @@ class EnvTrain(gym.Env):
         if self.done and  self.plot_chart:
             self.trades = self.trades.reset_index(drop=True)
             
-            print("\n".join([
-                f"-------------RESULTS--------------",
-                f"Total reward: {info['total_reward']:.2f}",
-                f"Total profit: {info['total_profit']:.4f}",
-                f"Num of deals: {info['deals']}",
-                f"Mean hold duration: {np.mean(info['duration']):.2f}",
-                f"----------------------------------"
-                ])
-            )
-            self.render_all()
+            #print(
+            
+            #self.render_all()
             self.plot_cummulatives(info)
 
 
@@ -224,23 +222,14 @@ class EnvTrain(gym.Env):
             self.history[key].append(value)
 
     def plot_cummulatives(self, info):
-        fig, (pl1, pl2) = plt.subplots(2,1, sharex=True, figsize=(12,6))
-
-        pl1.plot(info['cum_reward'])
-        pl1.set_title("Reward")
-        pl1.grid(True)
-
-        pl2.plot(info['cum_profit'])
-        pl2.set_title("Profit")
-        pl2.grid(True)
-
-        plt.show()
-
-    def render_all(self, title=None):
+        
+        #вывод графиков
+        fig, self.axes = plt.subplots(4,1, figsize=(12,8), sharex=True, gridspec_kw={'height_ratios': [2,2,2.5,1.5]})
+        fig.suptitle(f"Episode: {self.episode}, total reward: {info['total_reward']:.2f}, total profit: {info['total_profit']:.4f}, num of deals: {info['deals']}, mean hold duration: {np.mean(info['duration']):.2f}")
         local_prices = self.prices[self.start_tick:self.end_tick]
         window_ticks = np.arange(len(self.position_history))
-        fig, (pl1, pl2) = plt.subplots(2,1, sharex=True, figsize=(12,8), gridspec_kw={'height_ratios': [5, 3]})
-        pl1.plot(local_prices)
+
+        self.axes[2].plot(local_prices)
 
         long_ticks = []
         no_position_ticks = []
@@ -251,21 +240,33 @@ class EnvTrain(gym.Env):
             elif self.position_history[i] == Positions.Long.value:
                 long_ticks.append(tick)
 
-
-        pl1.plot(long_ticks, local_prices[long_ticks], 'go')
-        pl1.plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
-        pl1.set_title("Green - long position, Blue - no position")
-        pl1.grid(True)
+        
+        self.axes[2].plot(long_ticks, local_prices[long_ticks], 'go')
+        self.axes[2].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
+        self.axes[2].set_title("Green - long position, Blue - no position")
+        self.axes[2].grid(True)
 
         actions = self.history['action']
-        pl2.plot(actions)
-        pl2.grid(True)
-        pl2.set_title("Actions: Buy-0, Hold-1, Close-2")
+        self.axes[3].plot(actions)
+        self.axes[3].grid(True)
+        self.axes[3].set_title("Actions: Buy-0, Hold-1, Close-2")
 
-        if title:
-            plt.title(title)
+        self.axes[0].plot(info['cum_reward'])
+        self.axes[0].set_title("Reward")
+        self.axes[0].grid(True)
 
-        plt.show()
+        self.axes[1].plot(info['cum_profit'])
+        self.axes[1].set_title("Profit")
+        self.axes[1].grid(True)
+
+        display(fig)    
+        clear_output(wait=True)
+
+
+    def render_all(self, title=None):
+        pass
+
+        
 
     def close(self):
         plt.close()
