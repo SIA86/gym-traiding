@@ -190,7 +190,7 @@ class EnvTrain(gym.Env):
             self.all_total_rewards.append(self.total_reward)
             self.all_total_profits.append(self.total_profit)
 
-            self.plot_cummulatives(info)
+            self.plot_results(info)
 
         return observation, step_reward, False, self.done, info
 
@@ -217,9 +217,9 @@ class EnvTrain(gym.Env):
         for key, value in info.items():
             self.history[key].append(value)
 
-    def plot_cummulatives(self, info):
+    def plot_results(self, info):
         #вывод графиков
-        fig, self.axes = plt.subplots(6,1, figsize=(12,12), sharex=True, gridspec_kw={'height_ratios': [2,2,2,2,2.5,1.5]})
+        fig, self.axes = plt.subplots(6,1, figsize=(12,16), sharex=True, gridspec_kw={'height_ratios': [3,3,2,2,4,2]})
         fig.suptitle(f"Metrics at episode-{self.episode}")
         local_prices = self.prices[self.start_tick:self.end_tick]
         window_ticks = np.arange(len(self.position_history))
