@@ -30,7 +30,7 @@ class Positions(Enum):
         return Positions.Long if self == Positions.No_position else Positions.No_position
 
 
-class EnvTrain(gym.Env):
+class CryptoEnv(gym.Env):
     def __init__(self, 
                  dataframe: pd.DataFrame, 
                  frame_bound: tuple[int, int],
@@ -39,7 +39,10 @@ class EnvTrain(gym.Env):
                  episode_length: int = 1000,
                  trade_fee: float = 0.001,
                  penalty_mult: float = 0.01,
-                 ):
+                 freeze: int = 1,
+                 validation_skip: int = 5,
+                 train: bool = True):
+        
         assert dataframe.ndim == 2
 
         self.frame_bound = frame_bound
@@ -48,6 +51,9 @@ class EnvTrain(gym.Env):
         self.features_names = features_names
         self.trade_fee = trade_fee
         self.penalty_mult = penalty_mult
+        self.train = train
+        self.freeze = freeze
+        self.validation_skip = validation_skip
 
         self.df = dataframe[self.frame_bound[0]-self.window_size:self.frame_bound[1]].reset_index(drop=True)
         self.prices, self.norm_prices, self.signal_features = self._process_data()
@@ -78,12 +84,21 @@ class EnvTrain(gym.Env):
         self.episode = 0
         self.all_total_rewards = []
         self.all_total_profits = []
+        self.all_num_deals = []
+        self.all_mean_duration = []
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
         self.action_space.seed(int((self.np_random.uniform(0, seed if seed is not None else 100))))
-        self.start_tick = random.sample(range(self.window_size, len(self.prices) - self.episode_length), 1)[0]#текущая цена равна стартовой цене
-        self.end_tick = self.start_tick + self.episode_length
+        
+        if self.train:       
+            if self.episode % self.freeze == 0:
+                self.start_tick = random.sample(range(self.window_size, len(self.prices) - self.episode_length), 1)[0]#текущая цена равна стартовой цене
+                self.end_tick = self.start_tick + self.episode_length
+        else:
+            self.start_tick = self.window_size #текущая цена равна стартовой цене
+            self.end_tick = len(self.prices) - 1 
+        
         self.current_tick = self.start_tick
         self.done = False  #сброс флага 
         self.last_buy_tick = None #цена последней сделки long
@@ -102,10 +117,10 @@ class EnvTrain(gym.Env):
         self.deals = 0
         self.trades = pd.DataFrame(columns=['start_time', 'type_dir'], dtype=(int, int))
         self.history = {}
-        #plt.close('all')
 
         observation = self._get_observation()
         info = self._get_info(np.NaN)
+        plt.close('all')
 
         return observation, info
     
@@ -190,8 +205,12 @@ class EnvTrain(gym.Env):
             self.trades = self.trades.reset_index(drop=True)
             self.all_total_rewards.append(self.total_reward)
             self.all_total_profits.append(self.total_profit)
+            self.all_num_deals.append(self.deals)
+            self.all_mean_duration.append(np.mean(self.durations) if self.durations else 0)
 
-            self.plot_results(info)
+            if self.train:
+                if self.episode % self.validation_skip == 0:
+                    self.plot_train_results(info)
 
         return observation, step_reward, False, self.done, info
 
@@ -218,12 +237,13 @@ class EnvTrain(gym.Env):
         for key, value in info.items():
             self.history[key].append(value)
 
-    def plot_results(self, info):
+    def plot_train_results(self, info):
         local_prices = self.prices[self.start_tick:self.end_tick]
         window_ticks = np.arange(len(self.position_history))
 
-        #вывод графиков
-        fig, axis = plt.subplots(6,1, figsize=(12,14), gridspec_kw={'height_ratios': [2,2,2,2,3.5,1.5]}, tight_layout=True)
+        fig, axis = plt.subplots(8,1, figsize=(12,15), gridspec_kw={'height_ratios': [2,2,2,2,2,2,3.5,1.5]})
+        fig.suptitle(f"Training: episode: {self.episode}, timestep: {self.episode * self.episode_length}", x=0., horizontalalignment="left")
+        fig.tight_layout(h_pad=1.8)
 
         axis[0].plot(self.all_total_rewards)
         axis[0].set_title(f"Total reward (TR): {info['total_reward']:.3f}")
@@ -233,13 +253,21 @@ class EnvTrain(gym.Env):
         axis[1].set_title(f"Total profit (TP): {info['total_profit']:.3f}")
         axis[1].grid(True)
 
-        axis[2].plot(info['cum_reward'])
-        axis[2].set_title("Cummulative reward (CR)")
+        axis[2].plot(self.all_num_deals, color='green')
+        axis[2].set_title(f"Amount of deals (AD): {self.all_num_deals[-1]}")
         axis[2].grid(True)
 
-        axis[3].plot(info['cum_profit'], color='red')
-        axis[3].set_title("Cummulative profit (CP)")
+        axis[3].plot(self.all_mean_duration, color='brown')
+        axis[3].set_title(f"Mean deal duration (MDD): {self.all_mean_duration[-1]:.3f}")
         axis[3].grid(True)
+
+        axis[4].plot(info['cum_reward'], color='orange')
+        axis[4].set_title("Cummulative reward (CR)")
+        axis[4].grid(True)
+
+        axis[5].plot(info['cum_profit'], color='purple')
+        axis[5].set_title("Cummulative profit (CP)")
+        axis[5].grid(True)
 
         long_ticks = []
         no_position_ticks = []
@@ -250,21 +278,22 @@ class EnvTrain(gym.Env):
             elif self.position_history[i] == Positions.Long.value:
                 long_ticks.append(tick)
 
-        axis[4].plot(local_prices)
-        axis[4].plot(long_ticks, local_prices[long_ticks], 'go')
-        axis[4].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
-        axis[4].set_title(f"Episode length: {self.episode_length}, num deals: {info['deals']}, mean duration: {np.mean(info['duration']):.2f}")
-        axis[4].grid(True)
+        axis[6].plot(local_prices)
+        axis[6].plot(long_ticks, local_prices[long_ticks], 'go')
+        axis[6].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
+        axis[6].set_title(f"Prices. Green - long position. Blue- no position")
+        axis[6].grid(True)
 
         actions = self.history['action']
-        axis[5].plot(actions)
-        axis[5].grid(True)
-        axis[5].set_yticks(np.arange(3), ['Buy', 'Hold', 'Close']) 
+        axis[7].plot(actions)
+        axis[7].grid(True)
+        axis[7].set_yticks(np.arange(3), ['Buy', 'Hold', 'Close']) 
         buys, holds, closes = map(actions.count, [0,1,2])
-        axis[5].set_title(f"Buy: {buys}, Hold: {holds}, Close: {closes}")
+        axis[7].set_title(f"Buy: {buys}, Hold: {holds}, Close: {closes}")
+
+        plt.subplots_adjust(top=0.93)
 
         display(fig, clear=True) 
- 
         clear_output(wait=True)
 
     def _process_data(self):
@@ -279,35 +308,3 @@ class EnvTrain(gym.Env):
         norm_prices = signal_features[:,indx]
 
         return prices.astype(np.float32), norm_prices.astype(np.float32), signal_features.astype(np.float32)
-    
-
-class EnvVal(EnvTrain):
-    def reset(self, seed=None, options=None):
-        super().reset(seed=seed, options=options)
-        self.action_space.seed(int((self.np_random.uniform(0, seed if seed is not None else 100))))
-
-        self.start_tick = self.window_size #текущая цена равна стартовой цене
-        self.current_tick = self.start_tick
-        self.end_tick = len(self.prices) - 1 
-
-        self.done = False  #сброс флага 
-        self.last_buy_tick = None #цена последней сделки long
-        self.last_sell_tick = None #цена последней сделки short
-        self.position = Positions.No_position #сброс состояния портфеля на "нет позиций"
-        self.position_history = [] #запись в историю сделок "нет позиции" длиной ширина окна
-
-        self.total_reward = 0
-        self.total_profit = 1
-        self.cummulative_total_reward = []
-        self.cummulative_total_profit = []
-        self.hold_duration = 0
-
-        self.durations = []
-        self.deals = 0
-        self.trades = pd.DataFrame(columns=['start_time', 'type_dir'], dtype=(int, int))
-        self.history = {}
-
-        observation = self._get_observation()
-        info = self._get_info(np.NaN)
-
-        return observation, info
