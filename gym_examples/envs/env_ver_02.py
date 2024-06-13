@@ -125,12 +125,9 @@ class CryptoEnv(gym.Env):
         return observation, info
     
     def step(self, action):
-        step_penalty = 0
-        step_reward = 0
         self.current_tick += 1
-
         current_price = self.prices[self.current_tick]
-        current_norm_price = self.norm_prices[self.current_tick]
+        step_reward = self.compute_reward(action)
 
         if self.current_tick == self.end_tick:
             self.done = True
@@ -151,7 +148,6 @@ class CryptoEnv(gym.Env):
             
             elif action == Actions.Close.value: #если НС предсказывает покупать
                 self.hold_duration += 1  #сбрасываем счетчик длительности
-                step_penalty = current_norm_price * self.penalty_mult
 
             elif action == Actions.Hold.value:
                 self.hold_duration += 1 
@@ -160,18 +156,10 @@ class CryptoEnv(gym.Env):
             if any([action == Actions.Close.value,                               
                     self.done]): #если НС предсказывает закрыть лонг
                 self.position = Positions.No_position #меняем позицию на нет позиций
-
                 buy_price = self.prices[self.last_buy_tick]
-                buy_norm_price = self.norm_prices[self.last_buy_tick] #определяем цену входа в лонг по индексу
-                comission = (current_norm_price + buy_norm_price) * self.trade_fee #расчет комиссии
-
-                step_reward = (current_norm_price - buy_norm_price) - comission
-
                 temp_profit = self.total_profit  / (buy_price * (1 + self.trade_fee))
                 self.total_profit = temp_profit * (current_price * (1 - self.trade_fee))
-
                 self.deals += 1
-
                 self.durations.append(self.hold_duration)  
                 self.hold_duration = 0 #сбрасываем счетчик удержания
 
@@ -181,15 +169,11 @@ class CryptoEnv(gym.Env):
                 })
                 self.trades = pd.concat([self.trades, self.trade], axis=0) 
 
-
             elif action == Actions.Buy.value: #если НС предсказывает покупать
-                step_penalty = current_norm_price * self.penalty_mult
                 self.hold_duration += 1 #считаем длительность 
     
             elif action == Actions.Hold.value: #если НС предсказывает удерживать
                 self.hold_duration += 1 #считаем время удержания
-
-        step_reward -=  step_penalty
             
         #запись истории
         self.total_reward += step_reward
@@ -208,11 +192,33 @@ class CryptoEnv(gym.Env):
             self.all_num_deals.append(self.deals)
             self.all_mean_duration.append(np.mean(self.durations) if self.durations else 0)
 
-            if self.train:
-                if self.episode % self.validation_skip == 0:
-                    self.plot_train_results(info)
+            if self.episode % self.validation_skip == 0 or not self.train:
+                self.plot_train_results(info)
 
         return observation, step_reward, False, self.done, info
+
+    def compute_reward(self, action):
+        current_norm_price = self.norm_prices[self.current_tick]
+        buy_norm_price = self.norm_prices[self.last_buy_tick]
+        comission = (current_norm_price + buy_norm_price) * self.trade_fee 
+
+        if self.position == Positions.No_position:
+            if action == Actions.Close.value:
+                step_reward = -current_norm_price * self.penalty_mult
+            elif action == Actions.Hold.value:
+                step_reward = 0
+            elif action == Actions.Buy.value:
+                step_reward = 0
+
+        elif self.position == Positions.Long:
+            if action == Actions.Close.value:
+                step_reward = (current_norm_price - buy_norm_price) - comission
+            elif action == Actions.Hold.value:
+                step_reward = 0
+            elif action == Actions.Buy.value:
+                step_reward = -current_norm_price * self.penalty_mult
+
+        return step_reward
 
     def _get_info(self, action):
         return dict(
@@ -240,34 +246,41 @@ class CryptoEnv(gym.Env):
     def plot_train_results(self, info):
         local_prices = self.prices[self.start_tick:self.end_tick]
         window_ticks = np.arange(len(self.position_history))
+        
+        if self.train:
+            fig, axis = plt.subplots(8,1, figsize=(12,15), gridspec_kw={'height_ratios': [2,2,2,2,2,2,3.5,1.5]})
+            fig.suptitle(f"Training: episode: {self.episode}, timestep: {self.episode * self.episode_length}", x=0., horizontalalignment="left")
 
-        fig, axis = plt.subplots(8,1, figsize=(12,15), gridspec_kw={'height_ratios': [2,2,2,2,2,2,3.5,1.5]})
-        fig.suptitle(f"Training: episode: {self.episode}, timestep: {self.episode * self.episode_length}", x=0., horizontalalignment="left")
+            axis[0].plot(self.all_total_rewards)
+            axis[0].set_title(f"Total reward (TR): {info['total_reward']:.3f}")
+            axis[0].grid(True)
+
+            axis[1].plot(self.all_total_profits, color='red')
+            axis[1].set_title(f"Total profit (TP): {info['total_profit']:.3f}")
+            axis[1].grid(True)
+
+            axis[2].plot(self.all_num_deals, color='green')
+            axis[2].set_title(f"Amount of deals (AD): {self.all_num_deals[-1]}")
+            axis[2].grid(True)
+
+            axis[3].plot(self.all_mean_duration, color='brown')
+            axis[3].set_title(f"Mean deal duration (MDD): {self.all_mean_duration[-1]:.3f}")
+            axis[3].grid(True)
+            x = 4
+
+        else:
+            fig, axis = plt.subplots(4,1, figsize=(12,9), gridspec_kw={'height_ratios': [2,2,3.5,1.5]})
+            fig.suptitle(f"Validation", x=0., horizontalalignment="left")
+            x = 0
+
         fig.tight_layout(h_pad=1.8)
+        axis[x].plot(info['cum_reward'], color='orange')
+        axis[x].set_title("Cummulative reward (CR)")
+        axis[x].grid(True)
 
-        axis[0].plot(self.all_total_rewards)
-        axis[0].set_title(f"Total reward (TR): {info['total_reward']:.3f}")
-        axis[0].grid(True)
-
-        axis[1].plot(self.all_total_profits, color='red')
-        axis[1].set_title(f"Total profit (TP): {info['total_profit']:.3f}")
-        axis[1].grid(True)
-
-        axis[2].plot(self.all_num_deals, color='green')
-        axis[2].set_title(f"Amount of deals (AD): {self.all_num_deals[-1]}")
-        axis[2].grid(True)
-
-        axis[3].plot(self.all_mean_duration, color='brown')
-        axis[3].set_title(f"Mean deal duration (MDD): {self.all_mean_duration[-1]:.3f}")
-        axis[3].grid(True)
-
-        axis[4].plot(info['cum_reward'], color='orange')
-        axis[4].set_title("Cummulative reward (CR)")
-        axis[4].grid(True)
-
-        axis[5].plot(info['cum_profit'], color='purple')
-        axis[5].set_title("Cummulative profit (CP)")
-        axis[5].grid(True)
+        axis[x+1].plot(info['cum_profit'], color='purple')
+        axis[x+1].set_title("Cummulative profit (CP)")
+        axis[x+1].grid(True)
 
         long_ticks = []
         no_position_ticks = []
@@ -278,18 +291,18 @@ class CryptoEnv(gym.Env):
             elif self.position_history[i] == Positions.Long.value:
                 long_ticks.append(tick)
 
-        axis[6].plot(local_prices)
-        axis[6].plot(long_ticks, local_prices[long_ticks], 'go')
-        axis[6].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
-        axis[6].set_title(f"Prices. Green - long position. Blue- no position")
-        axis[6].grid(True)
+        axis[x+2].plot(local_prices)
+        axis[x+2].plot(long_ticks, local_prices[long_ticks], 'go')
+        axis[x+2].plot(no_position_ticks, local_prices[no_position_ticks], 'bo')
+        axis[x+2].set_title(f"Prices. Green - long position. Blue- no position")
+        axis[x+2].grid(True)
 
         actions = self.history['action']
-        axis[7].plot(actions)
-        axis[7].grid(True)
-        axis[7].set_yticks(np.arange(3), ['Buy', 'Hold', 'Close']) 
+        axis[x+3].plot(actions)
+        axis[x+3].grid(True)
+        axis[x+3].set_yticks(np.arange(3), ['Buy', 'Hold', 'Close']) 
         buys, holds, closes = map(actions.count, [0,1,2])
-        axis[7].set_title(f"Buy: {buys}, Hold: {holds}, Close: {closes}")
+        axis[x+3].set_title(f"Buy: {buys}, Hold: {holds}, Close: {closes}")
 
         plt.subplots_adjust(top=0.93)
 
@@ -308,3 +321,4 @@ class CryptoEnv(gym.Env):
         norm_prices = signal_features[:,indx]
 
         return prices.astype(np.float32), norm_prices.astype(np.float32), signal_features.astype(np.float32)
+
